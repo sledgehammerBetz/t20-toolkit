@@ -1,0 +1,43 @@
+{
+  "id": "t20-toolkit",
+  "title": "T20 Toolkit — Ferramentas para Tormenta20",
+  "description": "Ferramentas para Tormenta20 1.5.015: Planejador de Personagem (criação e níveis 1–20), Buscador de Magias, Grimório do Mago, Escriba Arcano, Usurpador, Engenhocas e Regras da mesa. Beta fechada.",
+  "version": "0.10.0-beta.1",
+  "authors": [
+    {
+      "name": "Bet"
+    }
+  ],
+  "compatibility": {
+    "minimum": "13",
+    "verified": "13.351",
+    "maximum": "13"
+  },
+  "relationships": {
+    "systems": [
+      {
+        "id": "tormenta20",
+        "type": "system",
+        "compatibility": {
+          "minimum": "1.5.015",
+          "verified": "1.5.015"
+        }
+      }
+    ]
+  },
+  "esmodules": [
+    "scripts/toolkit/main.js"
+  ],
+  "styles": [
+    "styles/ui-foundation.css",
+    "styles/t20-toolkit.css",
+    "styles/toolkit-fonts.css",
+    "styles/toolkit-theme.css",
+    "styles/toolkit-engenhocas.css",
+    "styles/toolkit-buscador.css",
+    "styles/toolkit-chat.css",
+    "styles/toolkit-planner.css"
+  ],
+  "manifest": "https://raw.githubusercontent.com/sledgehammerBetz/t20-toolkit/main/module.json",
+  "download": "https://raw.githubusercontent.com/sledgehammerBetz/t20-toolkit/main/releases/t20-toolkit-0.10.0-beta.1.zip"
+}

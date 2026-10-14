@@ -1,0 +1,181 @@
+/* ========================================================================== */
+/* T20 Engenhocas — UI Foundation                                            */
+/* Shared visual language for Activator, Creator and future module screens.  */
+/* ========================================================================== */
+
+.t20e-ui {
+  --t20e-gap-xs: 4px;
+  --t20e-gap-sm: 7px;
+  --t20e-gap-md: 10px;
+  --t20e-gap-lg: 14px;
+  --t20e-radius-sm: 5px;
+  --t20e-radius-md: 8px;
+  --t20e-border: rgba(127, 127, 127, 0.28);
+  --t20e-border-strong: rgba(127, 127, 127, 0.48);
+  --t20e-surface: rgba(127, 127, 127, 0.055);
+  --t20e-surface-strong: rgba(127, 127, 127, 0.10);
+  --t20e-muted: 0.70;
+}
+
+.t20e-ui * {
+  box-sizing: border-box;
+}
+
+.t20e-ui .t20e-panel {
+  border: 1px solid var(--t20e-border);
+  border-radius: var(--t20e-radius-md);
+  background: var(--t20e-surface);
+  padding: 9px;
+}
+
+.t20e-ui .t20e-panel + .t20e-panel,
+.t20e-ui .t20e-panel + .t20e-disclosure,
+.t20e-ui .t20e-disclosure + .t20e-panel,
+.t20e-ui .t20e-disclosure + .t20e-disclosure {
+  margin-top: var(--t20e-gap-md);
+}
+
+.t20e-ui .t20e-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 7px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.t20e-ui .t20e-muted {
+  opacity: var(--t20e-muted);
+}
+
+.t20e-ui .t20e-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.t20e-ui .t20e-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid var(--t20e-border-strong);
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.t20e-ui .t20e-badge.is-accent {
+  font-weight: 700;
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.t20e-ui .t20e-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.t20e-ui .t20e-metric {
+  min-width: 0;
+  border: 1px solid var(--t20e-border);
+  border-radius: var(--t20e-radius-sm);
+  padding: 6px 7px;
+  background: rgba(127, 127, 127, 0.04);
+}
+
+.t20e-ui .t20e-metric-label {
+  display: block;
+  font-size: 0.68rem;
+  opacity: var(--t20e-muted);
+  margin-bottom: 1px;
+}
+
+.t20e-ui .t20e-metric-value {
+  display: block;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.t20e-ui details.t20e-disclosure {
+  border: 1px solid var(--t20e-border);
+  border-radius: var(--t20e-radius-md);
+  background: rgba(127, 127, 127, 0.035);
+  overflow: clip;
+}
+
+.t20e-ui details.t20e-disclosure > summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  font-weight: 700;
+  list-style: none;
+  user-select: none;
+}
+
+.t20e-ui details.t20e-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.t20e-ui details.t20e-disclosure > summary::before {
+  content: "▸";
+  opacity: 0.72;
+  transform-origin: center;
+  transition: transform 120ms ease;
+}
+
+.t20e-ui details.t20e-disclosure[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.t20e-ui .t20e-disclosure-count {
+  margin-left: auto;
+  border: 1px solid var(--t20e-border);
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  opacity: 0.78;
+}
+
+.t20e-ui .t20e-disclosure-body {
+  border-top: 1px solid var(--t20e-border);
+  padding: 9px 10px 10px;
+}
+
+.t20e-ui .t20e-compact-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.t20e-ui .t20e-compact-list > li + li {
+  margin-top: 5px;
+}
+
+.t20e-ui .t20e-choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 7px;
+  align-items: start;
+  padding: 5px 0;
+}
+
+.t20e-ui .t20e-choice strong,
+.t20e-ui .t20e-choice small {
+  display: block;
+}
+
+.t20e-ui .t20e-choice small {
+  opacity: var(--t20e-muted);
+  margin-top: 1px;
+}
+
+@media (max-width: 620px) {
+  .t20e-ui .t20e-metrics {
+    grid-template-columns: 1fr;
+  }
+}

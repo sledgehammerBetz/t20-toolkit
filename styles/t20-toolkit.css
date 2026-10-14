@@ -1,0 +1,74 @@
+/* Tokens semânticos v0.1 — isolados para evitar CSS global no Foundry */
+:root {--t20tk-surface:#252b37;--t20tk-surface-deep:#181c26;--t20tk-border:#4a5160;--t20tk-gold:#d4ae6a;--t20tk-text:#ded7c6;--t20tk-muted:#b8c0c9;--t20tk-radius:10px;--t20tk-gap:12px}
+.t20tk-hub,.t20tk-grimorio{box-sizing:border-box;min-width:0;max-height:min(75vh,740px);overflow:auto;padding:16px;color:var(--color-text-primary,var(--t20tk-text))}
+.t20tk-hub *,.t20tk-grimorio *{box-sizing:border-box}
+.t20tk-hub header h2,.t20tk-grimorio header h2{margin:8px 0;font-size:1.55rem}
+.t20tk-hub header p,.t20tk-grimorio header p{opacity:.8}
+.t20tk-eyebrow{font-size:.8rem;letter-spacing:.13em;font-weight:700;color:var(--t20tk-gold)}
+.t20tk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--t20tk-gap);margin-top:16px}
+.t20tk-card{border:1px solid var(--t20tk-border);border-radius:var(--t20tk-radius);background:var(--t20tk-surface);padding:14px;min-width:0}
+.t20tk-card h3{margin:0 0 8px}.t20tk-card p{min-height:32px;opacity:.85}
+.t20tk-card footer{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.t20tk-card footer button{width:auto}.t20tk-status{font-size:.8rem;opacity:.85}.t20tk-status[data-status="preview"]{color:var(--t20tk-gold)}
+.t20tk-search-label{display:block;margin-top:18px;margin-bottom:6px;font-weight:600}
+.t20tk-grimorio input[type="search"]{width:100%;min-width:0;max-width:100%;margin-bottom:12px}
+.t20tk-spell-groups{display:grid;gap:12px}.t20tk-spell-group{border:1px solid var(--t20tk-border);border-radius:var(--t20tk-radius);overflow:hidden}
+.t20tk-spell-group h3{margin:0;padding:12px;background:var(--t20tk-surface);font-size:1rem}
+.t20tk-spell-group h3 small{font-size:.78rem;opacity:.75;padding-left:5px}
+.t20tk-spell-list{display:grid;gap:1px}.t20tk-spell{padding:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:rgba(127,127,127,.045)}
+.t20tk-spell strong{overflow-wrap:anywhere}.t20tk-spell-detail{opacity:.75;font-size:.82rem;margin-top:3px}
+.t20tk-pill{white-space:nowrap;border:1px solid var(--t20tk-border);padding:2px 8px;border-radius:20px}
+.t20tk-note{font-size:.78rem;opacity:.75;line-height:1.45;margin-top:14px}
+.t20tk-empty{border:1px dashed var(--t20tk-border);padding:18px;border-radius:var(--t20tk-radius)}
+.t20tk-spell[hidden],.t20tk-spell-group[hidden],.t20tk-no-results[hidden]{display:none!important}
+@media(max-width:560px){.t20tk-grid{grid-template-columns:1fr}}
+/* Grimório — memorização diária v0.1.0-alpha.4 */
+.t20tk-study-summary{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px;border:1px solid var(--t20tk-border);border-radius:var(--t20tk-radius);background:var(--t20tk-surface);margin:14px 0}
+.t20tk-study-summary p{font-size:.87rem;line-height:1.4;opacity:.83;margin:5px 0 0}
+.t20tk-study-status{font-size:.8rem;color:var(--t20tk-gold);white-space:nowrap}
+.t20tk-spell-choice{display:flex;align-items:center;gap:12px;min-width:0;flex:1}
+.t20tk-spell-choice input[type="checkbox"]{flex:0 0 auto;margin:0}
+.t20tk-spell-choice label{cursor:pointer;min-width:0;display:flex;flex-direction:column}
+.t20tk-spell-choice label strong{font-weight:650}
+.t20tk-spell-tags{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px}
+.t20tk-memorized{font-size:.72rem;color:var(--t20tk-gold)}
+.t20tk-spell.t20tk-is-memorized{border-left:3px solid var(--t20tk-gold)}
+.t20tk-study-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center;border-top:1px solid var(--t20tk-border);padding:15px 0 0;margin-top:15px}
+.t20tk-study-actions button{width:auto;margin-left:auto}
+.t20tk-study-confirm{display:flex;gap:8px;align-items:center;line-height:1.4;max-width:100%;font-size:.86rem}
+.t20tk-study-confirm input{margin:0;flex:0 0 auto}
+.t20tk-selection-counter{font-weight:700;color:var(--t20tk-gold);white-space:nowrap}
+.t20tk-warning{border-left:3px solid var(--t20tk-gold);background:rgba(212,174,106,.08);padding:10px 12px;font-size:.84rem}
+@media(max-width:560px){.t20tk-spell{align-items:flex-start}.t20tk-spell-tags{flex-direction:column;align-items:flex-end}.t20tk-study-actions{align-items:stretch}.t20tk-study-actions button{margin-left:0}}
+/* Buscador de Magias — seleção e importação confirmada, isolado do Grimório. */
+.t20tk-buscador {max-height:min(78vh,800px);overflow:auto;color:var(--color-text-primary,var(--t20tk-text));padding:15px;min-width:0}
+.t20tk-buscador *{box-sizing:border-box}.t20tk-buscador header h2{margin:6px 0}.t20tk-buscador header p{opacity:.8}
+.t20tk-bf-head{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end;margin:14px 0}
+.t20tk-bf-field{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:.85rem}
+.t20tk-bf-field strong{display:block;background:var(--t20tk-surface);border:1px solid var(--t20tk-border);padding:9px;border-radius:6px;min-height:35px}
+.t20tk-bf-field select{min-width:0;width:100%}.t20tk-bf-profile{grid-column:1/-1;border-left:3px solid var(--t20tk-gold);background:var(--t20tk-surface);padding:10px;line-height:1.5}
+.t20tk-bf-toolbar{display:flex;gap:8px;align-items:center;margin:12px 0}.t20tk-bf-toolbar input{flex:1;min-width:0}
+.t20tk-bf-toolbar button,.t20tk-bf-circles button,.t20tk-bf-result button{width:auto;white-space:nowrap}
+.t20tk-bf-circles{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.t20tk-bf-circles button.active{border-color:var(--t20tk-gold);color:var(--t20tk-gold)}
+.t20tk-bf-views{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:12px 0}.t20tk-bf-views label{display:flex;gap:6px;align-items:center;font-size:.85rem}.t20tk-bf-views .t20tk-bf-field{min-width:160px}
+.t20tk-bf-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;background:var(--t20tk-surface);border:1px solid var(--t20tk-border);padding:12px;border-radius:var(--t20tk-radius)}
+.t20tk-bf-filters[hidden]{display:none!important}.t20tk-bf-summary{margin:13px 0 10px;font-weight:600;color:var(--t20tk-gold)}
+.t20tk-bf-results{display:grid;gap:6px}.t20tk-bf-result{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 12px;background:var(--t20tk-surface);border:1px solid var(--t20tk-border);border-radius:6px}
+.t20tk-bf-result[data-eligibility="blocked"]{opacity:.7}.t20tk-bf-result-main{display:flex;flex-direction:column;gap:3px;min-width:0}
+.t20tk-bf-result-main strong{overflow-wrap:anywhere}.t20tk-bf-result-main small{opacity:.8}.t20tk-bf-result-right{display:flex;gap:10px;align-items:center;flex-shrink:0}
+.t20tk-bf-status{font-size:.82rem;white-space:nowrap}.t20tk-bf-status[data-status="allowed"]{color:#9fdbb3}.t20tk-bf-status[data-status="review"]{color:var(--t20tk-gold)}
+.t20tk-bf-status[data-status="blocked"]{color:#eaa89d}.t20tk-bf-description{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;max-height:54vh;overflow:auto}
+@media(max-width:660px){.t20tk-bf-head{grid-template-columns:1fr}.t20tk-bf-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.t20tk-bf-result{align-items:flex-start}.t20tk-bf-result-right{flex-direction:column}.t20tk-bf-toolbar{flex-wrap:wrap}}
+
+/* Aquisição ordinária de magias — alpha.6. */
+.t20tk-bf-result-right{flex-wrap:wrap;justify-content:flex-end}
+.t20tk-bf-result [data-browser-add]{border-color:var(--t20tk-gold);color:var(--t20tk-gold)}
+.t20tk-bf-learning{display:block;color:var(--t20tk-muted);font-size:.74rem}
+@media(max-width:660px){.t20tk-bf-result [data-browser-add]{white-space:normal}}
+
+/* Compatibilidade com data model v1.5.015: selecionar classe/caminho sem alterar ficha. */
+.t20tk-bf-manual{grid-column:1/-1;background:rgba(212,174,106,.075);border:1px solid var(--t20tk-border);border-radius:var(--t20tk-radius);padding:11px;display:grid;gap:9px}
+.t20tk-bf-manual[hidden],.t20tk-bf-manual [hidden]{display:none!important}
+.t20tk-bf-manual small{font-size:.78rem;opacity:.84}
+.t20tk-bf-school-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:5px}
+@media(max-width:660px){.t20tk-bf-school-grid{grid-template-columns:1fr}}

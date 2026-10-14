@@ -1,0 +1,28 @@
+/* T20 Toolkit — Engenhocas (0.6.0, feita do zero). Usa a base de toolkit-buscador.css. */
+.t20tk-eng .t20tk-eng-status { padding: 0 var(--t20-pad) 10px; }
+.t20tk-eng .t20tk-eng-status .t20tk-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; }
+.t20tk-eng .t20tk-eng-status .t20tk-bz-warn { margin: 8px 0 0; }
+.t20tk-eng p.t20tk-eng-status { margin: 0 var(--t20-pad) 10px; }
+.t20tk-eng .t20tk-eng-tools { display: flex; gap: 6px; margin-left: auto; }
+.t20tk-eng .t20tk-eng-intro { margin: 0 var(--t20-pad) 10px; }
+.t20tk-eng .t20tk-eng-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.t20tk-eng .t20tk-eng-craft { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; padding: 12px; border: 1px solid var(--t20-border-subtle); border-radius: var(--t20-radius); background: var(--t20-bg-surface); }
+.t20tk-eng .t20tk-eng-craft > .t20tk-ui-button { align-self: flex-end; }
+.t20tk-eng .t20tk-eng-craft input[type="text"] { width: 100%; }
+.t20tk-eng .t20tk-eng-targets { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 12px; }
+.t20tk-eng .t20tk-eng-targets .is-off { opacity: .6; }
+.t20tk-eng .t20tk-bz-status[data-tone="error"] { background: var(--t20-bg-surface-alt); color: var(--t20-error); }
+.t20tk-eng .t20tk-bz-status[data-tone="ok"] { background: var(--t20-accent-soft); color: var(--t20-success); }
+.t20tk-eng .t20tk-card-noimg { display: grid; place-items: center; grid-row: span 2; width: 36px; height: 36px; border-radius: var(--t20-radius-s); background: var(--t20-bg-interactive); color: var(--t20-accent); font-size: 18px; }
+.t20tk-eng .t20tk-card-noimg--big { width: 56px; height: 56px; font-size: 26px; flex: 0 0 auto; }
+.t20tk-eng .t20tk-detail-head .t20tk-card-noimg--big + div { min-width: 0; }
+.t20tk-eng .t20tk-es-tabs .t20tk-count { margin-left: 6px; }
+@container (max-width: 760px) {
+  .t20tk-eng .t20tk-eng-status .t20tk-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+/* diálogo de ativação */
+.t20tk-eng-confirm { display: flex; flex-direction: column; gap: 8px; }
+.t20tk-eng-confirm p { margin: 0; }
+.t20tk-eng-confirm small { opacity: .75; }
+.t20tk-eng-confirm label { display: flex; align-items: center; gap: 8px; }
+.t20tk-eng-confirm input[type="number"] { width: 80px; }
