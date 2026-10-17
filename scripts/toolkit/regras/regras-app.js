@@ -47,7 +47,10 @@ export class RegrasApp extends ApplicationV2 {
   async _renderHTML({ rules, gm }) {
     const methods = Object.entries(ATTRIBUTE_METHODS).map(([id, m]) => `<button type="button" class="t20tk-chip ${rules.methods[id] ? 'is-on' : ''}" data-action="toggleMethod" data-method="${id}" aria-pressed="${!!rules.methods[id]}" title="${escapeHtml(m.source)}" ${gm ? '' : 'disabled'}>${escapeHtml(m.label)}</button>`).join('');
     const AGES = { jda: ['Livro Básico', 'JdA p. 108: Maduro e Velho mudam atributos.'], herois: ['Heróis de Arton', 'p. 288: sete faixas etárias, níveis extras e complicações de idade.'] };
-    const ages = Object.entries(AGES).map(([id, [label, tip]]) => `<button type="button" class="t20tk-chip ${rules.ages[id] ? 'is-on' : ''}" data-action="toggleAge" data-age="${id}" aria-pressed="${!!rules.ages[id]}" title="${escapeHtml(tip)}" ${gm ? '' : 'disabled'}>${escapeHtml(label)}</button>`).join('');
+    // A idade do Livro Básico é regra do livro: sempre disponível. Só a de Heróis de Arton depende do mestre.
+    const ages = Object.entries(AGES).map(([id, [label, tip]]) => id === 'jda'
+      ? `<button type="button" class="t20tk-chip is-on" aria-pressed="true" title="${escapeHtml(tip)} Regra do livro: sempre disponível." disabled>${escapeHtml(label)} (sempre)</button>`
+      : `<button type="button" class="t20tk-chip ${rules.ages[id] ? 'is-on' : ''}" data-action="toggleAge" data-age="${id}" aria-pressed="${!!rules.ages[id]}" title="${escapeHtml(tip)}" ${gm ? '' : 'disabled'}>${escapeHtml(label)}</button>`).join('');
     const body = `<div class="t20tk-regras">
       ${gm ? '' : '<p class="t20tk-bz-warn">Só o mestre altera estas regras. Você vê o que vale na mesa.</p>'}
       <p class="t20tk-eyebrow">Atributos</p>
@@ -64,7 +67,7 @@ export class RegrasApp extends ApplicationV2 {
       <p class="t20tk-eyebrow">Criação do personagem</p>
       ${policy({ key: 'complications', title: 'Complicações', source: 'Heróis p. 282', text: 'Na criação, o jogador pode escolher uma complicação (geral ou da classe) e recebe um poder geral extra.', value: rules.complications, gm, options: ONOFF })}
       <section class="t20tk-policy"><header><h4>Idade</h4><span class="t20tk-policy-src">JdA p. 108 · Heróis p. 288</span></header>
-        <p class="t20tk-bz-note">Marque as regras liberadas. Cada personagem escolhe a sua na criação (ou nenhuma). Sem nenhuma marcada, a idade é só descritiva.</p>
+        <p class="t20tk-bz-note">A idade do Livro Básico vale sempre; marque também a de Heróis de Arton se quiser liberá-la. Cada personagem escolhe a sua na criação, antes dos atributos (ou nenhuma).</p>
         <div class="t20tk-chips">${ages}</div></section>
       ${policy({ key: 'originsCount', title: 'Origens por personagem', source: 'homebrew', text: 'Quantas origens o personagem escolhe na criação. Cada uma dá seus benefícios e itens.', value: rules.originsCount, gm,
         options: [{ value: 1, label: '1 (livro)', tone: 'on' }, { value: 2, label: '2 origens' }, { value: 3, label: '3 origens' }] })}
