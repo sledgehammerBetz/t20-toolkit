@@ -8,7 +8,8 @@ import { escapeHtml, fold, SPELL_SCHOOLS, plainText } from '../core/t20.js';
 import { ATTRS, ATTR_LABELS } from './creation-rules.js';
 import { ORIGINS } from './origins.js';
 import { ORIGIN_ITEMS } from './origin-items.js';
-import { gainsAt, classSkills, classInfo } from './planner-rules.js';
+import { gainsAt, classSkills, classInfo, prerequisiteText } from './planner-rules.js';
+import { GENERAL_CATS, catOf } from './level-view.js';
 import { devotionCheck, mustBeDevout, DEVOTEES } from '../core/gods.js';
 import { GRANTED_POWERS, POWER_ALIASES } from '../usurpador/usurpador-rules.js';
 import { getTableRules, allowedAgeRules, remapRacial, racialModifiers } from '../core/table-rules.js';
@@ -19,7 +20,7 @@ import { CASTER_CLASSES } from '../core/caster-rules.js';
 import {
   readCreation, raceInfo, creationSkills, creationIssues, ageFor, finalAttributes, originSlots, originSlot, slotPaths,
   otherAttributes, fxUuids, loadAttrEffects,
-  devotionContext, renderAttributes, renderAge, renderComplication, renderOriginItems, craftSelect, generalPowerOptions,
+  devotionContext, renderAttributes, renderAge, renderOriginItems, craftSelect, generalPowerOptions,
   skillLabels, sel, sign
 } from './creation-view.js';
 
@@ -59,9 +60,9 @@ const card = ({ img, name, sub = '', tags = [], selected = false, value, kind, d
     <button type="button" class="t20tk-ui-button ${selected ? 't20tk-ui-button--primary' : ''}" data-action="wzSelect" data-kind="${kind}" data-value="${escapeHtml(value)}" ${disabled ? `disabled title="${escapeHtml(reason)}"` : ''}>${selected ? 'Selecionado' : 'Selecionar'}</button>
   </li>`;
 
-const selectedBar = (kind, item, extra = '') => item
-  ? `<div class="t20tk-wz-selected">${item.img ? `<img src="${escapeHtml(item.img)}" alt="">` : '<span class="t20tk-wz-noimg">✦</span>'}<span><small>Selecionado</small><b>${escapeHtml(item.name)}</b>${extra}</span><button type="button" class="t20tk-wz-x" data-action="wzClear" data-kind="${kind}" aria-label="Limpar">✕</button></div>`
-  : `<div class="t20tk-wz-selected is-empty"><span><small>Selecionado</small><b>Nada ainda</b></span></div>`;
+const selectedBar = (kind, item, extra = '', label = 'Selecionado') => item
+  ? `<div class="t20tk-wz-selected">${item.img ? `<img src="${escapeHtml(item.img)}" alt="">` : '<span class="t20tk-wz-noimg">✦</span>'}<span><small>${escapeHtml(label)}</small><b>${escapeHtml(item.name)}</b>${extra}</span><button type="button" class="t20tk-wz-x" data-action="wzClear" data-kind="${kind}" aria-label="Limpar">✕</button></div>`
+  : `<div class="t20tk-wz-selected is-empty"><span><small>${escapeHtml(label)}</small><b>Nada ainda</b></span></div>`;
 
 function filterBox(app, kind, sources) {
   const w = wizardState(app);
@@ -356,6 +357,52 @@ function stepSkills(app, cr, rules, info) {
 /** Atributo-chave de cada perícia (Tormenta20 JdA, cap. 2). */
 const SKILL_ATTR = Object.freeze({ acrobacia: 'DES', adestramento: 'CAR', atletismo: 'FOR', atuacao: 'CAR', cavalgar: 'DES', conhecimento: 'INT', cura: 'SAB', diplomacia: 'CAR', enganacao: 'CAR', fortitude: 'CON', furtividade: 'DES', guerra: 'INT', iniciativa: 'DES', intimidacao: 'CAR', intuicao: 'SAB', investigacao: 'INT', jogatina: 'CAR', ladinagem: 'DES', luta: 'FOR', misticismo: 'INT', nobreza: 'INT', oficio: 'INT', percepcao: 'SAB', pilotagem: 'DES', pontaria: 'DES', reflexos: 'DES', religiao: 'SAB', sobrevivencia: 'SAB', vontade: 'SAB' });
 
+/* ---------- etapa: Complicação (Heróis de Arton, p. 282) ---------- */
+
+/** Dois buscadores na mesma etapa: a complicação (geral ou da classe) e o poder geral extra que ela dá. */
+function stepComplication(app, cr) {
+  const idx = app.index;
+  const w = wizardState(app);
+  const cls = idx.classes.find(c => c.uuid === cr.cls);
+  const clsKey = fold(cls?.name ?? '');
+  const comp = idx.powers.find(p => p.uuid === cr.complication);
+  const power = idx.powers.find(p => p.uuid === cr.complicationPower);
+  const tab = comp && w.compTab === 'power' ? 'power' : 'comp';
+  const text = p => strip(p.description).replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, '$1');
+  const found = (kind, p) => { const q = fold(w.q[kind] ?? ''); return !q || p.key.includes(q) || fold(text(p)).includes(q); };
+  const tabs = `<div class="t20tk-wz-field"><span>Escolher</span><div class="t20tk-wz-seg">
+    <button type="button" data-action="wzCompTab" data-value="comp" aria-pressed="${tab === 'comp'}">Complicação</button>
+    <button type="button" data-action="wzCompTab" data-value="power" aria-pressed="${tab === 'power'}" ${comp ? '' : 'disabled title="Escolha a complicação primeiro"'}>Poder geral extra</button></div></div>`;
+  const note = '<p class="t20tk-bz-note">Opcional (Heróis de Arton, p. 282): uma complicação geral ou da sua classe; em troca, um poder geral extra (cumprindo os pré-requisitos).</p>';
+  const bars = `${selectedBar('complication', comp, comp ? `<small>${comp.subtipo ? `de ${escapeHtml(cls?.name ?? comp.subtipo)}` : 'geral'}</small>` : '', 'Complicação')}${comp ? selectedBar('complicationPower', power, power ? `<small>${escapeHtml(GENERAL_CATS.find(([k]) => k === catOf(power))?.[1] ?? '')}</small>` : '', 'Poder geral extra') : ''}`;
+  const searchBox = kind => `<label class="t20tk-wz-field"><span>Buscar</span><input type="search" name="wzq-${kind}" data-wzq="${kind}" value="${escapeHtml(w.q[kind] ?? '')}" placeholder="Nome ou texto…"></label>`;
+  const snippet = p => { const t = text(p); return t.length > 140 ? `${t.slice(0, 140)}…` : t; };
+  const detailOf = (p, extra = '') => {
+    const pre = prerequisiteText(p.description);
+    return `<div class="t20tk-wz-detail"><h4>${escapeHtml(p.name)}</h4>${pre ? `<p class="t20tk-bz-note"><b>Pré-requisitos:</b> ${escapeHtml(pre)}</p>` : ''}<p class="t20tk-bz-note">${escapeHtml(text(p))}</p>${extra}</div>`;
+  };
+  if (tab === 'comp') {
+    const fc = fstate(app, 'comp');
+    const pool = idx.powers.filter(p => p.tipo === 'complicacao' && (!p.subtipo || (clsKey && p.subtipo === clsKey)));
+    const rows = pool.filter(p => found('comp', p) && (!fc.group || (fc.group === 'class' ? !!p.subtipo : !p.subtipo)));
+    const list = `<ul class="t20tk-wz-list">${rows.map(p => card({ img: p.img, name: p.name, sub: snippet(p), tags: [{ text: p.subtipo ? `De ${cls?.name ?? p.subtipo}` : 'Geral', tone: p.subtipo ? 'accent' : '' }, { text: p.packLabel }], selected: p.uuid === cr.complication, value: p.uuid, kind: 'complication' })).join('') || '<li class="t20tk-bz-empty">Nenhuma complicação com esse filtro.</li>'}</ul>`;
+    const classNote = comp?.subtipo ? '<p class="t20tk-bz-note">Complicação de classe: o poder só vale enquanto pelo menos metade dos seus níveis forem nessa classe.</p>' : '';
+    const detail = comp ? detailOf(comp, `${classNote}<button type="button" class="t20tk-ui-button t20tk-ui-button--primary" data-action="wzCompTab" data-value="power">${power ? 'Trocar o poder geral extra →' : 'Escolher o poder geral extra →'}</button>`) : '';
+    const groups = [{ value: 'general', label: 'Gerais' }, ...(cls ? [{ value: 'class', label: `De ${cls.name}` }] : [])];
+    return split(`${note}${tabs}${bars}${searchBox('comp')}${oneFilter(app, 'comp', 'group', 'Grupo', groups)}${cls ? '' : '<p class="t20tk-bz-meta">Escolha a classe para ver também as complicações dela.</p>'}${clearBtn(app, 'comp')}`,
+      `${viewToggle(app, 'comp', !!comp, `${rows.length} complicações`)}${showDetail(app, 'comp', !!comp) ? detail : list}`);
+  }
+  const fp = fstate(app, 'compPower');
+  const rows = idx.powers.filter(p => p.tipo === 'geral' && found('compPower', p) && (!fp.cat || catOf(p) === fp.cat));
+  const list = `<ul class="t20tk-wz-list">${rows.map(p => {
+    const pre = prerequisiteText(p.description);
+    return card({ img: p.img, name: p.name, sub: pre ? `Pré-requisitos: ${pre}` : snippet(p), tags: [{ text: GENERAL_CATS.find(([k]) => k === catOf(p))?.[1] ?? '' }, { text: p.packLabel }].filter(t => t.text), selected: p.uuid === cr.complicationPower, value: p.uuid, kind: 'complicationPower' });
+  }).join('') || '<li class="t20tk-bz-empty">Nenhum poder com esse filtro.</li>'}</ul>`;
+  const detail = power ? detailOf(power) : '';
+  return split(`${note}${tabs}${bars}${searchBox('compPower')}${oneFilter(app, 'compPower', 'cat', 'Categoria', GENERAL_CATS.map(([value, label]) => ({ value, label })))}${clearBtn(app, 'compPower')}`,
+    `${viewToggle(app, 'compPower', !!power, `${rows.length} poderes gerais`)}${showDetail(app, 'compPower', !!power) ? detail : list}`);
+}
+
 /* ---------- etapa: Divindade ---------- */
 
 function stepGod(app, cr, rules) {
@@ -441,7 +488,7 @@ export function renderWizard(app) {
     origin: () => stepOrigin(app, cr, rules, info),
     class: () => stepClass(app, cr, rules),
     skills: () => stepSkills(app, cr, rules, info),
-    complication: () => `<div class="t20tk-wz-page">${renderComplication(cr, app.index, app.index.classes.find(c => c.uuid === cr.cls)).replace(/<select /g, '<select data-wzfield ')}</div>`,
+    complication: () => stepComplication(app, cr),
     god: () => stepGod(app, cr, rules),
     summary: () => stepSummary(app, cr, rules, info, issues)
   }[w.step]();
@@ -510,9 +557,18 @@ export const WIZARD_ACTIONS = {
     const { kind, value } = target.dataset;
     const w = wizardState(this);
     if (kind === 'race') await patch(this, { race: value, '-=raceMap': null, '-=raceChoices': null, '-=racePool': null });
-    else if (kind === 'class') await patch(this, { cls: value, path: '', '-=classOneOf': null, classCraft: '', '-=skillPicks': null, complication: '' });
+    else if (kind === 'class') await patch(this, { cls: value, path: '', '-=classOneOf': null, classCraft: '', '-=skillPicks': null, complication: '', complicationPower: '' });
     else if (kind === 'god') await patch(this, { god: value, godPower: '' });
-    else if (kind.startsWith('origin:')) {
+    else if (kind === 'complication') {
+      const changed = readCreation(this.actor).complication !== value;
+      await patch(this, changed ? { complication: value, complicationPower: '' } : { complication: value });
+      w.view.comp = 'detail';
+      return this.render();
+    } else if (kind === 'complicationPower') {
+      await patch(this, { complicationPower: value });
+      w.view.compPower = 'detail';
+      return this.render();
+    } else if (kind.startsWith('origin:')) {
       const P = slotPaths(Number(kind.split(':')[1]));
       await patch(this, { [P.origin]: value, [P.picks]: [], [P.items]: {}, [P.choice]: '' });
     }
@@ -525,6 +581,8 @@ export const WIZARD_ACTIONS = {
     if (kind === 'race') await patch(this, { race: '', '-=raceChoices': null, '-=racePool': null });
     else if (kind === 'class') await patch(this, { cls: '', path: '', '-=skillPicks': null });
     else if (kind === 'god') await patch(this, { god: '', godPower: '' });
+    else if (kind === 'complication') { await patch(this, { complication: '', complicationPower: '' }); wizardState(this).view.comp = 'list'; wizardState(this).compTab = 'comp'; return this.render(); }
+    else if (kind === 'complicationPower') { await patch(this, { complicationPower: '' }); wizardState(this).view.compPower = 'list'; return this.render(); }
     else if (kind.startsWith('origin:')) { const P = slotPaths(Number(kind.split(':')[1])); await patch(this, { [P.origin]: '', [P.picks]: [] }); }
     wizardState(this).view[kind.split(':')[0]] = 'list';
     this.render();
@@ -543,6 +601,7 @@ export const WIZARD_ACTIONS = {
   wzFilterMode(event, target) { fstate(this, target.dataset.kind)[`${target.dataset.key}Mode`] = target.dataset.value; this.render(); },
   wzFilterOne(event, target) { fstate(this, target.dataset.kind)[target.dataset.key] = target.dataset.value; wizardState(this).view[target.dataset.kind] = 'list'; this.render(); },
   wzFilterClear(event, target) { const w = wizardState(this); const k = target.dataset.kind; w.f[k] = {}; w.q[k] = ''; w.src[k] = ''; this.render(); },
+  wzCompTab(event, target) { wizardState(this).compTab = target.dataset.value; this.render(); },
   wzSlot(event, target) { wizardState(this).slot = Number(target.dataset.value); this.render(); },
   async wzField(event, target) {
     const { field, value } = target.dataset;
