@@ -10,6 +10,8 @@ import { BASE_CLASSES, classInfo, gainsAt, prerequisiteText, evaluatePrerequisit
 import { CASTER_CLASSES } from '../core/caster-rules.js';
 import { getTableRules } from '../core/table-rules.js';
 import { skillLabels } from './creation-view.js';
+import { intBonusSkills } from './creation-rules.js';
+import { RACE_POOLS, racePools } from './race-choices.js';
 
 const strip = html => plainText(html);
 const STATUS = { ok: ['✔', 'Cumpre'], missing: ['✘', 'Não cumpre'], review: ['?', 'Conferir'], none: ['', 'Sem pré-requisitos'] };
@@ -22,31 +24,112 @@ export const catOf = p => {
 };
 
 const flag = (app, path, value) => app.actor.update({ [`flags.${MODULE_ID}.plan.levels.${app.selected}${path ? `.${path}` : ''}`]: value });
-/* ---------- Aumento de Atributo: uma vez por patamar para o mesmo atributo (JdA, poderes gerais) ---------- */
+/* ---------- Aumento de Atributo: uma vez por patamar para o mesmo atributo (JdA, poderes gerais) ----------
+ * O patamar é um portão: até o fim do patamar N, o mesmo atributo pode ter no máximo N aumentos.
+ * Quem não pegou o aumento no patamar iniciante pode pegar dois no veterano, e assim por diante. */
 const AUMENTO = { forca: 'for', destreza: 'des', constituicao: 'con', inteligencia: 'int', sabedoria: 'sab', carisma: 'car' };
 /** "Aumento de Atributo (Força)" → 'for'; o genérico → null. */
 export const aumentoAttr = name => { const m = fold(name).match(/^aumento de atributo \((\w+)\)/); return m ? AUMENTO[m[1]] ?? null : null; };
 export const tierOf = level => (level <= 4 ? 1 : level <= 10 ? 2 : level <= 16 ? 3 : 4);
 const TIER_LABEL = { 1: 'iniciante', 2: 'veterano', 3: 'campeão', 4: 'lenda' };
 
-/** Atributos que já receberam Aumento no patamar do nível `level` (ficha + plano), exceto a vaga `skipGain` deste nível. */
-export function aumentosNoPatamar(app, level, skipGain = null) {
-  const tier = tierOf(level);
+/** Aumentos de Atributo já tomados (ficha + plano), por atributo: [{ level, where }]. Ignora a vaga `skipGain` do nível `skipLevel`. */
+export function aumentosPorAtributo(app, skipLevel = null, skipGain = null) {
   const out = new Map();
+  const add = (a, level, where) => { if (!out.has(a)) out.set(a, []); out.get(a).push({ level, where }); };
+  const current = app.ctxData?.current ?? 0;
   for (const i of app.actor?.items ?? []) {
     const a = i.type === 'poder' ? aumentoAttr(i.name) : null;
+    if (!a) continue;
     const lv = Number(i.flags?.[MODULE_ID]?.plannerLevel) || 0;
-    if (a && lv && tierOf(lv) === tier) out.set(a, `${lv}º nível (na ficha)`);
+    add(a, lv || current || 1, lv ? `${lv}º nível (na ficha)` : 'na ficha');
   }
-  for (const [lv, entry] of Object.entries(app.ctxData.plan ?? {})) {
-    if (tierOf(Number(lv)) !== tier) continue;
+  for (const [lv, entry] of Object.entries(app.ctxData?.plan ?? {})) {
     for (const [gid, uuid] of Object.entries(entry?.picks ?? {})) {
-      if (Number(lv) === level && gid === skipGain) continue;
+      if (Number(lv) === skipLevel && gid === skipGain) continue;
       const a = aumentoAttr(app.index.powers.find(p => p.uuid === uuid)?.name ?? '');
-      if (a) out.set(a, `${lv}º nível (plano)`);
+      if (a) add(a, Number(lv), `${lv}º nível (plano)`);
     }
   }
   return out;
+}
+
+/**
+ * Por que não dá para pôr Aumento de Atributo em `a` no nível `level` ('' = pode).
+ * Ordena todos os aumentos do atributo (com o novo) e confere que o k-ésimo cai num patamar ≥ k.
+ */
+export function aumentoBloqueio(app, a, level, skipGain = null) {
+  const taken = aumentosPorAtributo(app, level, skipGain).get(a) ?? [];
+  const all = [...taken, { level, where: 'novo' }].sort((x, y) => x.level - y.level || (x.where === 'novo') - (y.where === 'novo'));
+  for (let k = 0; k < all.length; k++) {
+    const tier = tierOf(all[k].level);
+    if (k + 1 <= tier) continue;
+    const before = taken.filter(t => t.level <= level).length;
+    if (all[k].where === 'novo' || all[k].level <= level) return `${before} aumento(s) até aqui; o patamar ${TIER_LABEL[tierOf(level)]} permite ${tierOf(level)}`;
+    return `o plano do ${all[k].level}º nível passaria do limite do patamar ${TIER_LABEL[tier]}`;
+  }
+  return '';
+}
+
+/* ---------- perícias extras quando a Inteligência aumenta (JdA: perícias treinadas = Int) ---------- */
+
+/** Perícias de Inteligência que o nível `level` dá pelo Aumento de Atributo (Inteligência) escolhido nele. */
+export function intSkillGain(app, level) {
+  const entry = app.ctxData?.plan?.[level] ?? {};
+  const n = Object.values(entry.picks ?? {}).filter(u => aumentoAttr(app.index.powers.find(p => p.uuid === u)?.name ?? '') === 'int').length;
+  if (!n) return { want: 0, picks: [] };
+  const before = app.prereqContext(level).attributes.int ?? 0;
+  const want = intBonusSkills(before + n) - intBonusSkills(before);
+  return { want, picks: (entry.intSkills ?? []).slice(0, want) };
+}
+
+/** Perícias já planejadas por Inteligência em outros níveis (para não repetir). */
+function plannedIntSkills(app, except) {
+  return new Set(Object.entries(app.ctxData?.plan ?? {}).filter(([lv]) => Number(lv) !== except).flatMap(([, e]) => e?.intSkills ?? []));
+}
+
+function renderIntSkills(app, level) {
+  const g = intSkillGain(app, level);
+  if (!g.want) return '';
+  const labels = skillLabels();
+  const other = plannedIntSkills(app, level);
+  const chosen = new Set(g.picks);
+  const full = chosen.size >= g.want;
+  const opts = Object.entries(labels).filter(([k]) => !app.actor.system?.pericias?.[k]?.treinado && !other.has(k)).sort((x, y) => x[1].localeCompare(y[1], 'pt-BR'));
+  return `<section class="t20tk-wz-box ${full ? 'is-done' : ''}"><header><b>Perícias por Inteligência</b><small>O Aumento de Atributo (Inteligência) dá ${g.want} perícia(s) treinada(s) nova(s) (${chosen.size}/${g.want}).</small></header>
+    <ul class="t20tk-wz-skills">${opts.map(([k, l]) => `<li><button type="button" class="t20tk-wz-skill" data-state="${chosen.has(k) ? 'on' : full ? 'off' : ''}" data-action="lvIntSkill" data-value="${k}" ${full && !chosen.has(k) ? 'disabled' : ''}><b>${escapeHtml(l)}</b></button></li>`).join('')}</ul></section>`;
+}
+
+/* ---------- talentos raciais no lugar de poder de classe (uma vez por patamar) ---------- */
+
+/** Talentos do banco da raça da ficha que podem ocupar um poder de classe (Mashin, Kobolds, Kallyanach). */
+export function raceTalentOptions(app) {
+  const raceItem = [...(app.actor?.items ?? [])].find(i => i.type === 'race');
+  const race = raceItem && app.index.races.find(r => r.key === fold(raceItem.name));
+  if (!race) return { label: '', options: [] };
+  const cfg = RACE_POOLS[fold(race.name)];
+  if (!cfg?.levelUp) return { label: '', options: [] };
+  const pool = racePools(race, app.index.powers.filter(p => p.tipo === 'racial')).find(p => p.id === cfg.levelUp);
+  return { label: pool?.label ?? '', options: pool?.options ?? [] };
+}
+
+/** Talento racial já tomado no patamar do nível (ficha ou plano), fora a vaga `skipGain`. */
+function raceTalentInTier(app, level, skipGain, options) {
+  const ids = new Set(options.map(p => p.uuid));
+  const keys = new Set(options.map(p => p.key));
+  const tier = tierOf(level);
+  for (const i of app.actor?.items ?? []) {
+    const lv = Number(i.flags?.[MODULE_ID]?.plannerLevel) || 0;
+    if (lv > 1 && tierOf(lv) === tier && keys.has(fold(i.name))) return `${lv}º nível (na ficha)`;
+  }
+  for (const [lv, entry] of Object.entries(app.ctxData?.plan ?? {})) {
+    if (tierOf(Number(lv)) !== tier) continue;
+    for (const [gid, uuid] of Object.entries(entry?.picks ?? {})) {
+      if (Number(lv) === level && gid === skipGain) continue;
+      if (ids.has(uuid)) return `${lv}º nível (plano)`;
+    }
+  }
+  return '';
 }
 
 export const bf = app => (app.bf ??= { q: '', group: '', cat: '', eligible: true, hideOwned: true });
@@ -83,7 +166,7 @@ export function renderLevelEditor(app) {
     gains = `<section class="t20tk-wz-box"><header><b>${escapeHtml(row.cls)} — ${row.classLevel}º nível</b>${g.text ? `<small>${escapeHtml(g.text)}</small>` : ''}</header>
       ${g.modeled ? '' : '<p class="t20tk-bz-warn">Progressão desta classe não está no Planejador: aplicar sobe o nível; adicione as habilidades pela ficha.</p>'}
       <div class="t20tk-lv-gains">${g.gains.map(gain => renderGain(app, gain, row, entry, ctx)).join('') || '<p class="t20tk-bz-note">Só o nível (PV, PM e perícias da classe).</p>'}</div>
-      ${row.classLevel === 1 ? devotionNote(app, row.cls) : ''}</section>`;
+      ${row.classLevel === 1 ? devotionNote(app, row.cls) : ''}</section>${renderIntSkills(app, level)}`;
   }
   const footer = `<footer class="t20tk-wz-foot t20tk-lv-foot">
     ${entry.cls ? `<button type="button" class="t20tk-ui-button" data-action="clearLevel" data-level="${level}">Limpar plano</button>` : '<span></span>'}
@@ -174,11 +257,12 @@ function renderBrowser(app, row) {
     const ctx = app.prereqContext(b.kind === 'extra' ? app.ctxData.current : app.selected);
     const picks = entry.picks ?? {};
     const taken = new Set(Object.entries(picks).filter(([k]) => k !== b.gain).map(([, v]) => v));
+    const talents = b.kind === 'extra' ? { label: '', options: [] } : raceTalentOptions(app);
     let pool;
     if (b.kind === 'extra') pool = app.index.powers.filter(p => p.tipo === b.type);
     else {
       const o = app.powerOptions(row.cls, gain.powerClass);
-      pool = [...o.cls.map(p => ({ p, g: 'classe' })), ...o.general.map(p => ({ p, g: 'geral' })), ...o.distinction.map(p => ({ p, g: 'distincao' }))].filter(x => !f.group || x.g === f.group).map(x => x.p);
+      pool = [...o.cls.map(p => ({ p, g: 'classe' })), ...o.general.map(p => ({ p, g: 'geral' })), ...o.distinction.map(p => ({ p, g: 'distincao' })), ...talents.options.map(p => ({ p, g: 'raca' }))].filter(x => !f.group || x.g === f.group).map(x => x.p);
     }
     const rows = pool.filter(p => (!q || p.key.includes(q) || fold(p.description).includes(q))
       && (!f.cat || p.tipo !== 'geral' || catOf(p) === f.cat)
@@ -186,19 +270,21 @@ function renderBrowser(app, row) {
       && !(fold(p.name) === 'aumento de atributo' && pool.some(x => aumentoAttr(x.name)))
       && (!f.eligible || evaluatePrerequisites(prerequisiteText(p.description), ctx).status !== 'missing'));
     title = b.kind === 'extra' ? 'Ganho fora da progressão' : `${gain.label} — ${row.cls} ${row.classLevel}º`;
-    const groups = b.kind === 'extra' ? '' : chipRow('Grupo', 'group', [['', 'Todos'], ['classe', `De ${gain.powerClass || row.cls}`], ['geral', 'Gerais'], ...(getTableRules().distinctions ? [['distincao', 'Distinções']] : [])], f.group);
-    filters = `${groups}${chipRow('Categoria (poderes gerais)', 'cat', [['', 'Todas'], ...GENERAL_CATS], f.cat)}${toggleRow('Só os que cumpro (pré-requisitos)', 'eligible', f.eligible)}${toggleRow('Ocultar os que já tenho', 'hideOwned', f.hideOwned)}`;
+    const groups = b.kind === 'extra' ? '' : chipRow('Grupo', 'group', [['', 'Todos'], ['classe', `De ${gain.powerClass || row.cls}`], ['geral', 'Gerais'], ...(getTableRules().distinctions ? [['distincao', 'Distinções']] : []), ...(talents.options.length ? [['raca', talents.label]] : [])], f.group);
+    const talentNote = talents.options.length ? `<p class="t20tk-bz-note">${escapeHtml(talents.label)}: uma vez por patamar, um deles pode entrar no lugar de um poder de classe.</p>` : '';
+    filters = `${groups}${chipRow('Categoria (poderes gerais)', 'cat', [['', 'Todas'], ...GENERAL_CATS], f.cat)}${toggleRow('Só os que cumpro (pré-requisitos)', 'eligible', f.eligible)}${toggleRow('Ocultar os que já tenho', 'hideOwned', f.hideOwned)}${talentNote}`;
     count = rows.length;
     const action = b.kind === 'extra' ? 'lvExtraValue' : 'lvPick';
     const cur = b.kind === 'extra' ? app.extra?.value : picks[b.gain];
-    const tierUsed = b.kind === 'extra' ? new Map() : aumentosNoPatamar(app, app.selected, b.gain);
     const noPhysical = !!app.actor?.getFlag?.(MODULE_ID, 'creationRules')?.noPhysicalIncrease;
+    const talentIds = new Set(talents.options.map(p => p.uuid));
+    const talentTaken = talentIds.size ? raceTalentInTier(app, app.selected, b.gain, talents.options) : '';
     const block = p => {
+      if (talentIds.has(p.uuid)) return talentTaken ? `talento racial já no patamar ${TIER_LABEL[tierOf(app.selected)]}: ${talentTaken}` : '';
       const a = aumentoAttr(p.name);
-      if (!a) return '';
+      if (!a || b.kind === 'extra') return '';
       if (noPhysical && ['for', 'des', 'con'].includes(a)) return 'idade: sem atributo físico';
-      if (tierUsed.has(a)) return `já no patamar ${TIER_LABEL[tierOf(app.selected)]}: ${tierUsed.get(a)}`;
-      return '';
+      return aumentoBloqueio(app, a, app.selected, b.gain);
     };
     list = rows.map(p => { const why = block(p); return powerCard(app, p, ctx, { action, gain: b.gain ?? '', selected: cur === p.uuid, taken: taken.has(p.uuid) || !!why, takenLabel: why }); }).join('');
   }
@@ -306,6 +392,13 @@ export const LEVEL_ACTIONS = {
     this.render();
   },
   async lvUnpick(event, target) { await flag(this, `picks.${target.dataset.gain}`, null); },
+  async lvIntSkill(event, target) {
+    const g = intSkillGain(this, this.selected);
+    const cur = new Set(g.picks);
+    const v = target.dataset.value;
+    if (cur.has(v)) cur.delete(v); else if (cur.size < g.want) cur.add(v);
+    await flag(this, 'intSkills', [...cur]);
+  },
   lvFilter(event, target) { bf(this)[target.dataset.key] = target.dataset.value; this.render(); },
   lvFilterClear() { this.bf = { q: '', group: '', cat: '', eligible: false, hideOwned: false }; this.render(); },
   lvExtraPage() { this.page = 'extra'; this.browse = null; this.render(); },
