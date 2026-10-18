@@ -4,6 +4,7 @@
  * (grupo, categoria, só elegíveis, ocultar os que já tenho) e botão Selecionar.
  * Estado da tela: app.browse (o que está sendo escolhido) e app.bf (filtros da lista).
  */
+import { draftUpdate } from './plan-draft.js';
 import { MODULE_ID } from '../../constants.js';
 import { escapeHtml, fold, actorClasses, plainText } from '../core/t20.js';
 import { BASE_CLASSES, classInfo, gainsAt, prerequisiteText, evaluatePrerequisites } from './planner-rules.js';
@@ -23,7 +24,7 @@ export const catOf = p => {
   return 'raca';
 };
 
-const flag = (app, path, value) => app.actor.update({ [`flags.${MODULE_ID}.plan.levels.${app.selected}${path ? `.${path}` : ''}`]: value });
+const flag = (app, path, value) => draftUpdate(app, { [`flags.${MODULE_ID}.plan.levels.${app.selected}${path ? `.${path}` : ''}`]: value });
 /* ---------- Aumento de Atributo: uma vez por patamar para o mesmo atributo (JdA, poderes gerais) ----------
  * O patamar é um portão: até o fim do patamar N, o mesmo atributo pode ter no máximo N aumentos.
  * Quem não pegou o aumento no patamar iniciante pode pegar dois no veterano, e assim por diante. */
@@ -375,7 +376,7 @@ export const LEVEL_ACTIONS = {
     const cur = this.ctxData.plan[this.selected]?.cls;
     this.browse = null;
     if (fold(cur ?? '') === fold(value)) return this.render();
-    await this.actor.update({ [`flags.${MODULE_ID}.plan.levels.-=${this.selected}`]: null });
+    await draftUpdate(this, { [`flags.${MODULE_ID}.plan.levels.-=${this.selected}`]: null });
     await flag(this, '', { cls: value, picks: {} });
   },
   lvBrowse(event, target) {

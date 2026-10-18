@@ -5,6 +5,7 @@
  * Aplicar um nível: sobe system.niveis da classe (ou cria a classe), adiciona as habilidades
  * do nível pela tabela do livro e os poderes escolhidos. PV/PM o próprio sistema recalcula.
  */
+import { planFlag, draftUpdate, flushDraft, isOwnDraft } from './plan-draft.js';
 import { watchActor, batch, COMBAT_PATHS } from '../ui/live-refresh.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { MODULE_ID } from '../../constants.js';
@@ -24,7 +25,7 @@ import { renderLevelEditor, bindLevelEditor, LEVEL_ACTIONS, renderExtraPage, aum
 import { renderDoneLevel, RETRAIN_ACTIONS } from './retrain-view.js';
 
 /** Ações que gravam várias vezes: a janela redesenha uma vez no fim. */
-const inBatch = fn => function (event, target) { return batch(this, () => fn.call(this, event, target)); };
+const inBatch = fn => function (event, target) { return batch(this, async () => { await flushDraft(this.actor); return fn.call(this, event, target); }); };
 
 const ApplicationV2 = globalThis.foundry?.applications?.api?.ApplicationV2 ?? class {};
 const MARK = { ok: '✔', missing: '✘', review: '?', none: '' };
@@ -72,7 +73,7 @@ export class PlannerApp extends ApplicationV2 {
     const actor = this.actor;
     const classes = actorClasses(actor);
     const current = classes.reduce((s, c) => s + c.level, 0);
-    const plan = actor?.getFlag?.(MODULE_ID, 'plan')?.levels ?? {};
+    const plan = planFlag(actor).levels ?? {};
     const history = actor?.getFlag?.(MODULE_ID, 'history') ?? {};
     const timeline = buildTimeline(classes.map(c => ({ name: c.name, level: c.level })), plan);
     // Níveis já aplicados também podem ser abertos (ver o que entrou e retreinar).
@@ -250,17 +251,19 @@ export class PlannerApp extends ApplicationV2 {
   }
 
   _onFirstRender() {
-    watchActor(this, { ignore: COMBAT_PATHS });
+    // O rascunho do próprio Planejador já foi desenhado na hora do clique (plan-draft.js).
+    watchActor(this, { ignore: COMBAT_PATHS, skip: (hook, doc, changed, options, userId) => hook === 'updateActor' && isOwnDraft(options, userId) });
   }
 
   _onClose(options) {
+    flushDraft(this.actor);
     for (const [hook, id] of this._hooks) Hooks.off(hook, id);
     this._hooks = [];
     super._onClose?.(options);
   }
 
   async #clear(level) {
-    await this.actor.update({ [`flags.${MODULE_ID}.plan.levels.-=${level}`]: null });
+    await draftUpdate(this, { [`flags.${MODULE_ID}.plan.levels.-=${level}`]: null });
   }
 
   /* ---------- ações ---------- */
@@ -426,7 +429,7 @@ export class PlannerApp extends ApplicationV2 {
     this.selected = level;
   }
 
-  static async #onRollAttributes() { await rollCreationAttributes(this.actor); }
+  static async #onRollAttributes() { await flushDraft(this.actor); await rollCreationAttributes(this.actor); }
 
   static async #onApplyCreation() {
     await applyCreation(this);
@@ -434,7 +437,7 @@ export class PlannerApp extends ApplicationV2 {
   }
 
   static #onOpenBuscador() { game.t20Toolkit?.buscador?.open({ actor: this.actor }); }
-  static async #onAttrStep(event, target) { await stepCreationAttribute(this.actor, target.dataset.attr, target.dataset.delta); }
+  static async #onAttrStep(event, target) { await stepCreationAttribute(this, target.dataset.attr, target.dataset.delta); }
   static async #onTheme(event, target) { await switchTheme(target.dataset.themeValue); }
   static #onOpenSheet() { this.actor?.sheet?.render(true); }
 }

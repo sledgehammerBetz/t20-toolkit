@@ -14,6 +14,7 @@
  * As regras opcionais vêm de getTableRules() (janela Regras da mesa).
  */
 import { MODULE_ID } from '../../constants.js';
+import { planFlag, draftUpdate } from './plan-draft.js';
 import { postCard, chatFlavor } from '../ui/chat.js';
 import { escapeHtml, fold } from '../core/t20.js';
 import { ATTRS, ATTR_LABELS, POINT_COST, stepPoint, validatePoints, parseClassSkills, skillKeyFor, intBonusSkills } from './creation-rules.js';
@@ -42,7 +43,7 @@ export function skillLabels() {
 }
 
 export function readCreation(actor) {
-  const cr = actor?.getFlag?.(MODULE_ID, 'plan')?.creation ?? {};
+  const cr = planFlag(actor).creation ?? {};
   if (!cr.skillPicks && (cr.classSkills?.length || cr.intSkills?.length)) {
     // formato antigo: nomes das perícias da classe + chaves de Inteligência
     const labels = skillLabels();
@@ -519,10 +520,10 @@ export function creationProblems(app, cr) {
 }
 
 /** Botões ▲▼ da compra de pontos. */
-export async function stepCreationAttribute(actor, attr, delta) {
+export async function stepCreationAttribute(app, attr, delta) {
   if (!ATTRS.includes(attr)) return;
-  const cur = readCreation(actor).base?.[attr] ?? 0;
-  await actor.update({ [`${FLAG}.base.${attr}`]: stepPoint(cur, Number(delta)) });
+  const cur = readCreation(app.actor).base?.[attr] ?? 0;
+  await draftUpdate(app, { [`${FLAG}.base.${attr}`]: stepPoint(cur, Number(delta)) });
 }
 
 /** Rola os atributos pelo método escolhido (4d6, 3d6, épica ou Nimb) e mostra no chat. */

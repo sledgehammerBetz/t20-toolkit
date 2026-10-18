@@ -19,23 +19,24 @@ export function onlyIgnored(changed, ignore) {
 /**
  * Liga os hooks da janela (guardados em app._hooks, que o _onClose de cada janela já desliga).
  * @param {object} app  janela com `actor`, `rendered`, `render()` e `_hooks`
- * @param {object} o  { hooks, ignore: caminhos que não pedem redesenho, skip(hook, doc, changed): true para ignorar, wait: ms }
+ * @param {object} o  { hooks, ignore: caminhos que não pedem redesenho, skip(hook, doc, ...argumentos do hook): true para ignorar, wait: ms }
  */
 export function watchActor(app, { hooks = DEFAULT_HOOKS, ignore = [], skip = null, wait = 80 } = {}) {
   let timer = null;
   const render = app.render;
   // Um redesenho feito pela própria janela cancela o que estava esperando.
   app.render = function (...args) { clearTimeout(timer); timer = null; return render.apply(this, args); };
-  app._t20Refresh = () => {
+  app._t20Refresh = (ms = wait) => {
     if (app._t20Busy) { app._t20Dirty = true; return; }
     clearTimeout(timer);
-    timer = setTimeout(() => { timer = null; if (app.rendered) app.render(); }, wait);
+    timer = setTimeout(() => { timer = null; if (app.rendered) app.render(); }, ms);
   };
   for (const hook of hooks) {
-    const id = Hooks.on(hook, (doc, changed) => {
+    const id = Hooks.on(hook, (doc, ...rest) => {
       const actor = app.actor;
       if (!actor || (doc !== actor && doc?.parent !== actor)) return;
-      if (skip?.(hook, doc, changed)) return;
+      if (skip?.(hook, doc, ...rest)) return;
+      const changed = rest[0];
       if (hook.startsWith('update') && ignore.length && onlyIgnored(changed, ignore)) return;
       app._t20Refresh();
     });

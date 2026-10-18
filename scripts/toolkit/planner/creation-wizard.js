@@ -3,6 +3,7 @@
  * etapas à esquerda com ✔, filtros e "selecionado" no meio, lista com Selecionar à direita, Voltar/Próximo embaixo.
  * Os dados ficam em flags['t20-toolkit'].plan.creation (veja creation-view.js); o estado da tela fica em app.wizard.
  */
+import { draftUpdate } from './plan-draft.js';
 import { MODULE_ID } from '../../constants.js';
 import { escapeHtml, fold, SPELL_SCHOOLS, plainText } from '../core/t20.js';
 import { ATTRS, ATTR_LABELS } from './creation-rules.js';
@@ -25,7 +26,7 @@ import {
 } from './creation-view.js';
 
 const FLAG = `flags.${MODULE_ID}.plan.creation`;
-const set = (app, patch) => app.actor.update(Object.fromEntries(Object.entries(patch).map(([k, v]) => [k.startsWith('-=') ? `${FLAG}.${k}` : `${FLAG}.${k}`, v])));
+const set = (app, patch) => draftUpdate(app, Object.fromEntries(Object.entries(patch).map(([k, v]) => [`${FLAG}.${k}`, v])));
 const strip = html => plainText(html);
 
 /* ---------- etapas ---------- */
@@ -592,7 +593,7 @@ export const WIZARD_ACTIONS = {
     const w = wizardState(this);
     const leaving = w.step;
     w.step = target.dataset.step;
-    if (leaving && leaving !== w.step && !readCreation(this.actor).seen?.[leaving]) await this.actor.update({ [`${FLAG}.seen.${leaving}`]: true }, { render: false });
+    if (leaving && leaving !== w.step && !readCreation(this.actor).seen?.[leaving]) await draftUpdate(this, { [`${FLAG}.seen.${leaving}`]: true });
     if (w.step === 'raceChoices') await ensureSpells(this);
     this.render();
     if (['attributes', 'skills', 'summary'].includes(w.step)) refreshAttrEffects(this);
