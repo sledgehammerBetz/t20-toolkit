@@ -58,7 +58,7 @@ export class UsurpadorApp extends ApplicationV2 {
       testText: UsurpadorApp.#onTestText,
       testExtraStep: UsurpadorApp.#onTestExtraStep,
       testHoly: UsurpadorApp.#onTestHoly,
-      testTake10: UsurpadorApp.#onTestTake10,
+      testZero: UsurpadorApp.#onTestZero,
       pickGod: UsurpadorApp.#onPickGod,
       togglePower: UsurpadorApp.#onTogglePower,
       endCapture: UsurpadorApp.#onEndCapture,
@@ -79,7 +79,7 @@ export class UsurpadorApp extends ApplicationV2 {
     this.descCache = new Map();
     this._hooks = [];
     const saved = actor?.getFlag?.(MODULE_ID, TEST_FLAG) ?? {};
-    this.test = { skill: saved.skill || TEST_SKILL, extra: Number(saved.extra) || 0, take10: !!saved.take10, fx: { ...(saved.fx ?? {}) }, text: { ...(saved.text ?? {}) } };
+    this.test = { skill: saved.skill || TEST_SKILL, extra: Number(saved.extra) || 0, zero: !!saved.zero, fx: { ...(saved.fx ?? {}) }, text: { ...(saved.text ?? {}) } };
   }
 
   get title() { return this.actor ? `Usurpador — ${this.actor.name}` : 'Usurpador'; }
@@ -156,32 +156,32 @@ export class UsurpadorApp extends ApplicationV2 {
     for (const t of texts) if (this.test.text[t.id] && !t.onSheet) extras.push({ label: t.source, value: t.value });
     if (this.test.extra) extras.push({ label: 'Outros', value: this.test.extra });
     const parts = testParts({ skillLabel: skill.label, skillValue: skill.value, armorPenalty: this.ctxData.armorPenalty, holySymbol, extras });
-    return { skill, skills, substitutes, effects, texts, parts, bonus: fixedBonus(parts), formula: testFormula(parts), pmCost: Math.max(0, pmCost) };
+    return { skill, skills, substitutes, effects, texts, parts, bonus: fixedBonus(parts), fixed: parts.every(p => typeof p.value === 'number' || /^[+-]?\d+$/.test(String(p.value).trim())), formula: testFormula(parts), pmCost: Math.max(0, pmCost) };
   }
 
   /** Chance do teste: escolhendo 10 é tudo ou nada; rolando, a do d20. */
-  #chance(dc, setup) { return this.test.take10 ? (10 + setup.bonus >= dc ? 100 : 0) : chanceOf(dc, setup.bonus); }
+  /** "Escolher 0": resultado = só o bônus (sem crítico nem falha crítica). Só vale quando o bônus já alcança a CD. */
+  #canZero(dc, setup) { return setup.fixed && setup.bonus >= dc; }
+  #zero(dc, setup) { return !!this.test.zero && this.#canZero(dc, setup); }
 
   async #saveTest() {
     if (this.actor?.isOwner) await this.actor.setFlag(MODULE_ID, TEST_FLAG, foundry.utils.deepClone(this.test));
   }
 
-  /** Rola o teste montado (sem escolher 10) e posta no chat. */
-  async #rollTest(setup, dc, title, { needTotal = false } = {}) {
-    const speaker = ChatMessage.getSpeaker({ actor: this.actor });
+  /** Rola o teste montado (ou escolhe 0) e posta no chat. */
+  async #rollTest(setup, dc, title) {
     let roll;
     let success;
-    if (!this.test.take10 && chanceOf(dc, setup.bonus) >= 100 && !needTotal) {
-      // passa em qualquer resultado do d20: não rola
+    if (this.#zero(dc, setup)) {
       success = true;
-      roll = { total: 1 + setup.bonus };
-      await postCard(this.actor, { tool: 'usurpador', tone: 'success', title, subtitle: 'sucesso automático', rows: [['Teste', `${setup.skill.label} ${sign(setup.bonus)} contra CD ${dc}`]], note: 'Passa mesmo tirando 1 no d20, então não foi preciso rolar.' });
+      roll = { total: setup.bonus };
+      await postCard(this.actor, { tool: 'usurpador', tone: 'success', title, subtitle: 'escolheu 0: sucesso', rows: [['Resultado', `${setup.bonus} (só o bônus de ${setup.skill.label})`], ['CD', String(dc)]], note: 'Sem rolar o d20: não há acerto crítico nem falha crítica.' });
     } else {
-      roll = await new Roll(this.test.take10 ? setup.formula.replace(/^1d20/, '10') : setup.formula).evaluate();
+      roll = await new Roll(setup.formula).evaluate();
       success = roll.total >= dc;
       await roll.toMessage({
-        speaker,
-        flavor: chatFlavor({ tool: 'usurpador', title, result: `${setup.skill.label}${this.test.take10 ? ' (escolheu 10)' : ''} CD ${dc} · ${success ? 'sucesso' : 'falha'}`, tone: success ? 'success' : 'error' })
+        speaker: ChatMessage.getSpeaker({ actor: this.actor }),
+        flavor: chatFlavor({ tool: 'usurpador', title, result: `${setup.skill.label} CD ${dc} · ${success ? 'sucesso' : 'falha'}`, tone: success ? 'success' : 'error' })
       });
     }
     if (setup.pmCost && typeof this.actor.spendMana === 'function') await this.actor.spendMana(setup.pmCost, 0, false);
@@ -252,7 +252,7 @@ export class UsurpadorApp extends ApplicationV2 {
         img: s.img, name: s.name, status: 'allowed', action: 'openSpell', uuid: s.uuid,
         metaHtml: `${escapeHtml(SPELL_SCHOOLS[s.school] ?? '')} • ${s.cost ?? '?'} PM • <b>CD ${dc}</b> sem aprimoramentos`,
         source: s.book || s.packLabel, metaExtra: viaTags(viaOf.get(s.uuid)),
-        side: `<span class="t20tk-pill">${s.circle}º</span><span class="t20tk-bz-status" title="Chance no d20 com ${escapeHtml(setup.skill.label)} ${sign(setup.bonus)}">${this.#chance(dc, setup)}%</span>${this.actor.isOwner ? `<button type="button" class="t20tk-ui-button t20tk-ui-button--primary" data-action="usurp" data-uuid="${s.uuid}">Usurpar…</button>` : ''}`
+        side: `<span class="t20tk-pill">${s.circle}º</span><span class="t20tk-bz-status" title="Chance no d20 com ${escapeHtml(setup.skill.label)} ${sign(setup.bonus)}">${chanceOf(dc, setup.bonus)}%</span>${this.actor.isOwner ? `<button type="button" class="t20tk-ui-button t20tk-ui-button--primary" data-action="usurp" data-uuid="${s.uuid}">Usurpar…</button>` : ''}`
       });
     }).join('');
   }
@@ -283,7 +283,7 @@ export class UsurpadorApp extends ApplicationV2 {
       <div class="t20tk-wz-chips">${main.map(m => chip(m.key, m.label, m.note)).join('')}<button type="button" class="t20tk-chip ${this.view.allSkills ? 'is-on' : ''}" data-action="testAllSkills">Outra perícia…</button></div>
       ${setup.substitutes.length ? `<p class="t20tk-bz-note">${setup.substitutes.map(s => `<b>${escapeHtml(s.source)}</b> deixa usar ${escapeHtml(s.label)}`).join(' · ')}.</p>` : ''}
       ${all}
-      <ul class="t20tk-us-mods">${toggle('testTake10', 'take10', this.test.take10, '<b>Escolher 10</b> <small>sem rolar o d20; a regra do Usurpar não permite em Usurpar, use se o mestre liberar</small>')}${holyRow}${fx}${texts}</ul>
+      <ul class="t20tk-us-mods">${holyRow}${fx}${texts}</ul>
       <label class="t20tk-us-extra">Outros bônus ou penalidades
         <span class="t20tk-us-step"><button type="button" data-action="testExtraStep" data-step="-1">−</button><input type="number" name="testExtra" value="${this.test.extra}" step="1"><button type="button" data-action="testExtraStep" data-step="1">+</button></span></label>
       <p class="t20tk-bz-meta">${setup.parts.map((p, i) => `${i ? ' ' : ''}${escapeHtml(p.label)} ${escapeHtml(showValue(p.value))}`).join(' ·')}</p>
@@ -317,6 +317,7 @@ export class UsurpadorApp extends ApplicationV2 {
         ${c.profile?.level >= 20 ? '<p class="t20tk-bz-note">Roubo Divino entra depois do teste: −1 PM e +1 na CD da magia a cada 10 pontos.</p>' : ''}</div>`;
     } else dc = captureDC(c.usesToday);
     const totalPM = cost + setup.pmCost;
+    const zero = this.#zero(dc, setup);
     const head = `<header class="t20tk-us-cast-head">${k.img ? `<img src="${escapeHtml(k.img)}" alt="">` : ''}<span><small>${usurp ? 'Usurpar' : `Capturar de ${escapeHtml(k.god)}`}</small><b>${escapeHtml(k.name)}</b>${usurp ? `<em>${k.circle}º círculo · ${k.base} PM sem aprimoramentos</em>` : `<em>1 hora · +5 na CD a cada uso no mesmo dia</em>`}</span>${back}</header>`;
     const desc = `<details class="t20tk-disclosure" data-key="desc" ${usurp ? '' : 'open'}><summary>Descrição</summary><div class="t20tk-disclosure-body t20tk-bz-description">${k.html || '<p>Sem descrição.</p>'}</div></details>`;
     const lacks = totalPM > c.pm ? `<p class="t20tk-bz-warn">Você tem ${c.pm} PM e esta conjuração gasta ${totalPM}.</p>` : '';
@@ -324,12 +325,13 @@ export class UsurpadorApp extends ApplicationV2 {
       ${usurp ? `<span><small>PM</small><b>${cost}</b></span>` : ''}
       ${setup.pmCost ? `<span><small>PM do teste</small><b>${setup.pmCost}</b></span>` : ''}
       <span><small>CD</small><b>${dc}</b></span>
-      <span><small>Teste</small><b>${escapeHtml(this.test.take10 ? setup.formula.replace(/^1d20/, '10') : setup.formula)}</b></span>
-      <span><small>Chance</small><b>${this.#chance(dc, setup)}%</b></span>
-      <button type="button" class="t20tk-ui-button t20tk-ui-button--primary" data-action="castRoll">${this.#chance(dc, setup) >= 100 && !(usurp && c.profile?.level >= 20) ? 'Passar' : this.test.take10 ? 'Escolher 10' : 'Rolar'} ${escapeHtml(setup.skill.label)}${usurp ? ' e lançar' : ''}</button>
+      <span><small>Teste</small><b>${escapeHtml(zero ? `0 + ${setup.bonus}` : setup.formula)}</b></span>
+      <span><small>Chance</small><b>${zero ? 100 : chanceOf(dc, setup.bonus)}%</b></span>
+      ${this.#canZero(dc, setup) ? `<button type="button" class="t20tk-chip ${zero ? 'is-on' : ''}" data-action="testZero" title="O resultado é só o bônus (${setup.bonus}): passa sem rolar, mas sem chance de acerto crítico">Escolher 0</button>` : ''}
+      <button type="button" class="t20tk-ui-button t20tk-ui-button--primary" data-action="castRoll">${zero ? 'Escolher 0' : 'Rolar'} ${escapeHtml(setup.skill.label)}${usurp ? ' e lançar' : ''}</button>
     </div>`;
     const rule = usurp
-      ? `<p class="t20tk-bz-note">CD 20 + custo final em PM (com os aprimoramentos). Falhou: a magia é perdida e os PM são gastos. Pela regra não pode escolher 10. Se a chance for 100%, passa sem rolar. Depois de passar, a janela de conjuração do sistema abre com estes aprimoramentos já marcados.</p>`
+      ? `<p class="t20tk-bz-note">CD 20 + custo final em PM (com os aprimoramentos). Falhou: a magia é perdida e os PM são gastos. Não pode escolher 10. Quando o bônus já alcança a CD, dá para escolher 0 (passa sem rolar, sem crítico). Depois de passar, a janela de conjuração do sistema abre com estes aprimoramentos já marcados.</p>`
       : `<p class="t20tk-bz-note">Passou: você conta como devoto de ${escapeHtml(k.god)} e recebe este poder até o fim do dia. Confira os pré-requisitos do poder.</p>`;
     return `<section class="t20tk-us-cast">${head}${desc}${enh}${this.#renderTest(setup, { holy: usurp })}${rule}${lacks}${sum}</section>`;
   }
@@ -359,7 +361,7 @@ export class UsurpadorApp extends ApplicationV2 {
         meta: p.found ? `${this.view.god ? '' : `${p.god} · `}${p.found.packLabel}` : 'Não está nos compêndios instalados',
         sub: p.owned ? 'Já está na ficha' : (p.found ? (open ? 'Clique para fechar a descrição' : 'Clique para ver o que o poder faz') : ''),
         action: p.found ? 'togglePower' : '', uuid: key, selected: open,
-        side: `<span class="t20tk-bz-status" title="Chance no d20 com ${escapeHtml(setup.skill.label)} ${sign(setup.bonus)}">${ok ? `${this.#chance(dc, setup)}%` : '—'}</span>${ok && this.actor.isOwner ? `<button type="button" class="t20tk-ui-button t20tk-ui-button--primary" data-action="capture" data-uuid="${p.found.uuid}" data-god="${escapeHtml(p.god)}">Capturar…</button>` : ''}`
+        side: `<span class="t20tk-bz-status" title="Chance no d20 com ${escapeHtml(setup.skill.label)} ${sign(setup.bonus)}">${ok ? `${chanceOf(dc, setup.bonus)}%` : '—'}</span>${ok && this.actor.isOwner ? `<button type="button" class="t20tk-ui-button t20tk-ui-button--primary" data-action="capture" data-uuid="${p.found.uuid}" data-god="${escapeHtml(p.god)}">Capturar…</button>` : ''}`
       });
       const desc = open ? `<li class="t20tk-us-desc t20tk-bz-description">${this.descCache.get(p.found.uuid) ?? `<p>${escapeHtml(plainText(p.found.description))}</p>`}</li>` : '';
       return card + desc;
@@ -477,7 +479,7 @@ export class UsurpadorApp extends ApplicationV2 {
   }
   static #onTestText(event, target) { const id = target.dataset.id; this.test.text[id] = !this.test.text[id]; this.render(); }
   static #onTestExtraStep(event, target) { this.test.extra = (Number(this.test.extra) || 0) + Number(target.dataset.step); this.render(); }
-  static #onTestTake10() { this.test.take10 = !this.test.take10; this.render(); }
+  static #onTestZero() { this.test.zero = !this.test.zero; this.render(); }
   static #onTestHoly() { this.view.holySymbol = !this.view.holySymbol; this.render(); }
 
   static #onPickGod(event, target) {
@@ -513,7 +515,7 @@ export class UsurpadorApp extends ApplicationV2 {
     const stale = actor.effects?.filter(e => e.getFlag?.(MODULE_ID, 'temp') === 'roubo-divino').map(e => e.id) ?? [];
     if (stale.length) await actor.deleteEmbeddedDocuments('ActiveEffect', stale);
     const setup = this.#testSetup({ holySymbol: this.view.holySymbol });
-    const { roll, success } = await this.#rollTest(setup, dc, `Usurpar: ${k.name}`, { needTotal: (this.ctxData.profile?.level ?? 0) >= 20 });
+    const { roll, success } = await this.#rollTest(setup, dc, `Usurpar: ${k.name}`);
     if (!success) {
       if (cost > 0 && typeof actor.spendMana === 'function') await actor.spendMana(cost, 0, false);
       await postCard(actor, { tool: 'usurpador', tone: 'error', title: 'Magia perdida', items: [{ name: k.name, img: k.img, note: `${cost} PM gastos mesmo assim` }] });
