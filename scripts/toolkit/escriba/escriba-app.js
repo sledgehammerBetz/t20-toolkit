@@ -3,6 +3,7 @@
  * Cria a magia na ficha com flags['t20-toolkit'].learnedBy = 'escriba', que o Buscador não conta no limite do nível.
  * Pergaminhos do sistema: item `consumivel` com system.tipo 'scroll' e flags.core.sourceId apontando para a magia.
  */
+import { watchActor, COMBAT_PATHS } from '../ui/live-refresh.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { MODULE_ID } from '../../constants.js';
 import { SPELL_SCHOOLS, SPELL_TYPES, escapeHtml, fold, actorClasses, arcanistPaths, actorSpells, hasPower, trainedSkillMatching } from '../core/t20.js';
@@ -158,8 +159,7 @@ export class EscribaApp extends ApplicationV2 {
   }
 
   _onFirstRender() {
-    const refresh = (doc) => { const a = doc?.parent ?? doc; if (a === this.actor && this.rendered) this.render(); };
-    for (const hook of ['createItem', 'deleteItem', 'updateItem', 'updateActor']) this._hooks.push([hook, Hooks.on(hook, refresh)]);
+    watchActor(this, { ignore: COMBAT_PATHS });
   }
 
   _onClose(options) {

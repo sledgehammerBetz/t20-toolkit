@@ -5,6 +5,7 @@
  * Aplicar um nível: sobe system.niveis da classe (ou cria a classe), adiciona as habilidades
  * do nível pela tabela do livro e os poderes escolhidos. PV/PM o próprio sistema recalcula.
  */
+import { watchActor, batch, COMBAT_PATHS } from '../ui/live-refresh.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { MODULE_ID } from '../../constants.js';
 import { escapeHtml, fold, actorClasses, arcanistPaths } from '../core/t20.js';
@@ -22,6 +23,9 @@ import { renderWizard, bindWizard, WIZARD_ACTIONS } from './creation-wizard.js';
 import { renderLevelEditor, bindLevelEditor, LEVEL_ACTIONS, renderExtraPage, aumentoAttr, intSkillGain } from './level-view.js';
 import { renderDoneLevel, RETRAIN_ACTIONS } from './retrain-view.js';
 
+/** Ações que gravam várias vezes: a janela redesenha uma vez no fim. */
+const inBatch = fn => function (event, target) { return batch(this, () => fn.call(this, event, target)); };
+
 const ApplicationV2 = globalThis.foundry?.applications?.api?.ApplicationV2 ?? class {};
 const MARK = { ok: '✔', missing: '✘', review: '?', none: '' };
 const norm = v => fold(v).replace(/[^a-z0-9º ]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -34,14 +38,14 @@ export class PlannerApp extends ApplicationV2 {
     position: { width: 1040, height: 760 },
     actions: {
       pickLevel: PlannerApp.#onPickLevel,
-      apply: PlannerApp.#onApply,
-      undo: PlannerApp.#onUndo,
+      apply: inBatch(PlannerApp.#onApply),
+      undo: inBatch(PlannerApp.#onUndo),
       clearLevel: PlannerApp.#onClearLevel,
       rollAttributes: PlannerApp.#onRollAttributes,
       attrStep: PlannerApp.#onAttrStep,
-      addExtra: PlannerApp.#onAddExtra,
-      removeExtra: PlannerApp.#onRemoveExtra,
-      applyCreation: PlannerApp.#onApplyCreation,
+      addExtra: inBatch(PlannerApp.#onAddExtra),
+      removeExtra: inBatch(PlannerApp.#onRemoveExtra),
+      applyCreation: inBatch(PlannerApp.#onApplyCreation),
       openBuscador: PlannerApp.#onOpenBuscador,
       theme: PlannerApp.#onTheme,
       t20nav: onNavigate,
@@ -246,8 +250,7 @@ export class PlannerApp extends ApplicationV2 {
   }
 
   _onFirstRender() {
-    const refresh = (doc) => { const a = doc?.parent ?? doc; if (a === this.actor && this.rendered) this.render(); };
-    for (const hook of ['createItem', 'deleteItem', 'updateItem', 'updateActor']) this._hooks.push([hook, Hooks.on(hook, refresh)]);
+    watchActor(this, { ignore: COMBAT_PATHS });
   }
 
   _onClose(options) {

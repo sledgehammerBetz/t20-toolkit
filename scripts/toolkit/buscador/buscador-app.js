@@ -3,6 +3,7 @@
  * Lê o índice dos compêndios, avalia cada magia contra as classes da ficha
  * e adiciona a magia escolhida à ficha com seus aprimoramentos.
  */
+import { watchActor } from '../ui/live-refresh.js';
 import { enrichDescription } from '../ui/enrich.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { MODULE_ID } from '../../constants.js';
@@ -139,8 +140,7 @@ export class BuscadorApp extends ApplicationV2 {
   }
 
   _onFirstRender() {
-    const refresh = (item) => { if (this.actor && item?.parent === this.actor && this.rendered) this.render(); };
-    for (const hook of ['createItem', 'deleteItem', 'updateItem']) this._hooks.push([hook, Hooks.on(hook, refresh)]);
+    watchActor(this, { hooks: ['createItem', 'deleteItem', 'updateItem'] });
   }
 
   _onClose(options) {

@@ -4,6 +4,7 @@
  * que fazem a ficha do Tormenta20 mostrar o sol de "preparada" em cada magia.
  * Estado próprio: flags['t20-toolkit'].grimorio = { lastStudyDay, lastStudyTime, memorized[] }.
  */
+import { watchActor, COMBAT_PATHS } from '../ui/live-refresh.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { getSpellCatalog, classifySpell } from '../core/spells/spell-catalog.js';
 import { filterSpells, filterOptions, EMPTY_FILTERS } from '../core/spells/spell-filter.js';
@@ -163,11 +164,7 @@ export class GrimorioApp extends ApplicationV2 {
   }
 
   _onFirstRender() {
-    const refresh = (doc) => {
-      const actor = doc?.parent ?? doc;
-      if (this.actor && actor === this.actor && this.rendered) this.render();
-    };
-    for (const hook of ['createItem', 'deleteItem', 'updateItem', 'updateActor']) this._hooks.push([hook, Hooks.on(hook, refresh)]);
+    watchActor(this, { ignore: COMBAT_PATHS });
   }
 
   _onClose(options) {

@@ -9,6 +9,7 @@
  * escolhe a perícia do teste (Enganação ou a que um poder põe no lugar) e os bônus. Depois de passar,
  * a janela de conjuração do sistema abre já com os mesmos aprimoramentos marcados.
  */
+import { watchActor } from '../ui/live-refresh.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { MODULE_ID } from '../../constants.js';
 import { postCard, chatFlavor } from '../ui/chat.js';
@@ -396,8 +397,11 @@ export class UsurpadorApp extends ApplicationV2 {
   }
 
   _onFirstRender() {
-    const refresh = (doc) => { const a = doc?.parent ?? doc; if (a === this.actor && this.rendered) this.render(); };
-    for (const hook of ['createItem', 'deleteItem', 'updateItem', 'updateActor', 'createActiveEffect', 'deleteActiveEffect', 'updateActiveEffect']) this._hooks.push([hook, Hooks.on(hook, refresh)]);
+    // O efeito temporário do Roubo Divino entra e sai durante a conjuração: não pede redesenho.
+    watchActor(this, {
+      hooks: ['createItem', 'deleteItem', 'updateItem', 'updateActor', 'createActiveEffect', 'deleteActiveEffect', 'updateActiveEffect'],
+      skip: (hook, doc) => hook.endsWith('ActiveEffect') && doc?.getFlag?.(MODULE_ID, 'temp') === 'roubo-divino'
+    });
   }
 
   _onClose(options) {
