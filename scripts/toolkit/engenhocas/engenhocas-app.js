@@ -13,7 +13,8 @@ import { spellFilterPanel, bindSpellFilterPanel, viaTags } from '../ui/spell-fil
 import { toolFrame, onNavigate, switchTheme } from '../ui/frame.js';
 import { metric, pill } from '../ui/components.js';
 import { APARATOS, APARATO_BY_ID, CRAFTABLE_TYPES, craftCheck, activationDC, aparatoBlocker, engenhocaState } from './engenhocas-rules.js';
-import { actorInventor, actorEngenhocas, craftEngenhoca, activateEngenhoca, repairEngenhoca, newDay, newScene, dismantleEngenhoca, installAparato, removeAparato } from './engenhocas-actions.js';
+import { actorInventor, actorEngenhocas, craftEngenhoca, activateEngenhoca, repairEngenhoca, newDay, newScene, dismantleEngenhoca, installAparato, removeAparato, couplingArmors, automatoUsed, coupleEngenhoca, uncoupleEngenhoca, syncEngenhocas } from './engenhocas-actions.js';
+import { COUPLE_PRICE, coupleBlocker } from './engenhocas-rules.js';
 
 const ApplicationV2 = globalThis.foundry?.applications?.api?.ApplicationV2 ?? class {};
 
@@ -48,6 +49,8 @@ export class EngenhocasApp extends ApplicationV2 {
       install: EngenhocasApp.#onInstall,
       removeAparato: EngenhocasApp.#onRemoveAparato,
       openItem: EngenhocasApp.#onOpenItem,
+      couple: EngenhocasApp.#onCouple,
+      uncouple: EngenhocasApp.#onUncouple,
       theme: EngenhocasApp.#onTheme,
       t20nav: onNavigate,
       openSheet: EngenhocasApp.#onOpenSheet
@@ -119,7 +122,7 @@ export class EngenhocasApp extends ApplicationV2 {
           el.checked ? set.add(el.value) : set.delete(el.value);
           this.ui.targets = [...set];
         } else this.ui[key] = el.type === 'checkbox' ? el.checked : el.value;
-        if (['hideMade', 'target'].includes(key)) this.render();
+        if (['hideMade', 'target', 'mode'].includes(key)) this.render();
       });
     }
   }
@@ -127,6 +130,7 @@ export class EngenhocasApp extends ApplicationV2 {
   _onFirstRender() {
     const refresh = (doc) => { if (this.actor && (doc === this.actor || doc?.parent === this.actor) && this.rendered) this.render(); };
     for (const hook of ['createItem', 'deleteItem', 'updateItem', 'updateActor']) this._hooks.push([hook, Hooks.on(hook, refresh)]);
+    syncEngenhocas(this.actor).catch(error => console.warn('[T20 Toolkit] Não deu para acertar as engenhocas da ficha:', error));
   }
 
   _onClose(options) {
@@ -143,6 +147,7 @@ export class EngenhocasApp extends ApplicationV2 {
     if (!inv.skillTrained) warns.push('Ofício (engenhoqueiro) não está treinado.');
     const n = this.items().length;
     const pm = this.actor.system?.attributes?.pm ?? {};
+    const powers = [['chutes', 'Chutes e Palavrões'], ['potente', 'Invenção Potente'], ['maestria', 'Maestria em Perícia'], ['manutencao', 'Manutenção Eficiente'], ['personalizado', 'Aparato Personalizado'], ['mecanizada', 'Armadura Mecanizada'], ['avancada', 'Armadura Avançada'], ['automatoEng', 'Autômato Engenhocado'], ['calibrar', 'Forçar a Calibragem'], ['rapida', 'Ativação Rápida'], ['goblinoide', 'Engenhocaria Goblinoide']].filter(([k]) => inv[k]).map(([, l]) => l);
     return `<section class="t20tk-eng-status">
       <div class="t20tk-metrics">
         ${metric('Círculo máximo', inv.maxCircle ? `${inv.maxCircle}º` : '—')}
@@ -151,6 +156,7 @@ export class EngenhocasApp extends ApplicationV2 {
         ${metric('PM', `${pm.value ?? 0}/${pm.max ?? 0}`)}
         ${metric('Dinheiro', `T$ ${Number(this.actor.system?.dinheiro?.tp) || 0}`)}
       </div>
+      ${powers.length ? `<p class="t20tk-bz-note">Poderes considerados: ${powers.map(p => `<b>${escapeHtml(p)}</b>`).join(', ')}.</p>` : ''}
       ${warns.map(w => `<p class="t20tk-bz-warn">${escapeHtml(w)}</p>`).join('')}
     </section>`;
   }
@@ -178,7 +184,7 @@ export class EngenhocasApp extends ApplicationV2 {
           <img src="${escapeHtml(item.img)}" alt="" loading="lazy">
           <span class="t20tk-card-copy">
             <span class="t20tk-bz-name">${escapeHtml(item.name)}</span>
-            <span class="t20tk-card-meta">${escapeHtml(st.spellName)} · ${st.mode === 'body' ? 'vestida' : 'empunhada'}</span>
+            <span class="t20tk-card-meta">${escapeHtml(st.spellName)} · ${escapeHtml(this.#formLabel(st))}</span>
             <span class="t20tk-card-sub">Próxima CD ${dc}${st.usesToday ? ` · ${st.usesToday} ativação(ões) hoje` : ''}${st.aparatos.length ? ` · ${st.aparatos.map(a => APARATO_BY_ID.get(a)?.label).join(', ')}` : ''}</span>
           </span>
         </button>
@@ -202,7 +208,7 @@ export class EngenhocasApp extends ApplicationV2 {
     const duration = sys.duracao?.special || [sys.duracao?.value, t20Label('timePeriods', sys.duracao?.units)].filter(Boolean).join(' ');
     return `<div class="t20tk-detail-head"><img src="${escapeHtml(item.img)}" alt=""><div>
         <p class="t20tk-eyebrow">Engenhoca</p><h3>${escapeHtml(item.name)}</h3>
-        <div class="t20tk-pills">${pill(`${st.circle}º círculo`)}${pill(st.mode === 'body' ? 'Vestida' : 'Empunhada')}${pill(`PV ${item.system?.pv?.value ?? '—'}/${item.system?.pv?.max ?? '—'}`)}${pill('Defesa 15 · RD 5')}</div>
+        <div class="t20tk-pills">${pill(`${st.circle}º círculo`)}${pill(this.#formLabel(st, true))}${pill(`PV ${item.system?.pv?.value ?? '—'}/${item.system?.pv?.max ?? '—'}`)}${pill('Defesa 15 · RD 5')}</div>
       </div></div>
       ${st.jammed ? '<p class="t20tk-bz-warn">Enguiçada: consertar leva 1 hora de trabalho.</p>' : ''}
       <div class="t20tk-metrics">${metric('Próxima CD', String(dc.dc))}${metric('Ativações hoje', String(st.usesToday))}${metric('Execução', t20Label('abilityActivationTypes', sys.ativacao?.execucao) || 'padrão')}${metric('Alcance', t20Label('distanceUnits', sys.alcance))}${metric('Duração', duration)}${metric('Resistência', sys.resistencia?.txt || 'Sem resistência')}</div>
@@ -212,8 +218,48 @@ export class EngenhocasApp extends ApplicationV2 {
         <button type="button" class="t20tk-ui-button" data-action="openItem" data-id="${item.id}">Abrir item</button>
         <button type="button" class="t20tk-ui-button" data-action="dismantle" data-id="${item.id}">Desmontar</button>
       </div>
+      ${this.#renderCouple(item, st, inv)}
       <details class="t20tk-disclosure" open data-key="aparatos"><summary>Aparatos <span class="t20tk-count">${st.aparatos.length}/2</span></summary><div class="t20tk-disclosure-body">${aparatos}</div></details>
       <details class="t20tk-disclosure" data-key="efeito"><summary>Efeito simulado: ${escapeHtml(st.spellName)}</summary><div class="t20tk-disclosure-body t20tk-bz-description">${sys.description?.value ?? '<p>Sem descrição.</p>'}</div></details>`;
+  }
+
+  /** Forma da engenhoca: empunhada, vestida ou acoplada (na armadura ou no autômato). */
+  #formLabel(st, cap = false) {
+    let t = st.mode === 'body' ? 'vestida' : 'empunhada';
+    if (st.coupled?.kind === 'armor') t = `acoplada em ${this.actor?.items.get(st.coupled.id)?.name ?? 'armadura'}`;
+    else if (st.coupled?.kind === 'automato') t = 'acoplada no autômato';
+    return cap ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+  }
+
+  /** Acoplar na armadura (Armadura Mecanizada) ou no autômato (Autômato Engenhocado). */
+  #renderCouple(item, st, inv) {
+    if (!inv.mecanizada && !inv.automatoEng && !st.coupled) return '';
+    if (st.coupled) {
+      const where = st.coupled.kind === 'armor' ? this.actor.items.get(st.coupled.id) : null;
+      const lost = st.coupled.kind === 'armor' && !where;
+      return `<details class="t20tk-disclosure" open data-key="acoplar"><summary>Acoplada</summary><div class="t20tk-disclosure-body">
+        <p>${st.coupled.kind === 'armor' ? `Na armadura <b>${escapeHtml(where?.name ?? 'removida da ficha')}</b>: não conta como vestida e não precisa ser empunhada.${inv.avancada && where ? ` Armadura Avançada soma +${couplingArmors(this.actor).find(a => a.item.id === where.id)?.upgrades ?? 0} no teste.` : ''}` : 'No autômato: 1× por rodada, +2 PM para ativar com ação de movimento, com o autômato como origem (alcance curto).'}</p>
+        ${lost ? '<p class="t20tk-bz-warn">A armadura não está mais na ficha.</p>' : ''}
+        <button type="button" class="t20tk-ui-button" data-action="uncouple" data-id="${item.id}">Desacoplar</button>
+      </div></details>`;
+    }
+    const rows = [];
+    if (inv.mecanizada) {
+      const armors = couplingArmors(this.actor);
+      if (!armors.length) rows.push('<p class="t20tk-bz-note">Armadura Mecanizada: a ficha não tem armadura leve ou pesada.</p>');
+      for (const a of armors) {
+        const why = coupleBlocker(st, { kind: 'armor', tipo: a.tipo, used: a.used }, inv);
+        rows.push(`<li><button type="button" class="t20tk-ui-button" data-action="couple" data-id="${item.id}" data-target="${a.item.id}" ${why && !game.user.isGM ? 'disabled' : ''}>Acoplar</button> <b>${escapeHtml(a.item.name)}</b> <span class="t20tk-bz-meta">${a.tipo === 'pesada' ? 'pesada' : 'leve'} · ${a.used}/${a.capacity}${inv.avancada ? ` · ${a.upgrades} melhoria(s)` : ''}${why ? ` · ${escapeHtml(why)}` : ''}</span></li>`);
+      }
+    }
+    if (inv.automatoEng) {
+      const why = coupleBlocker(st, { kind: 'automato', used: automatoUsed(this.actor) }, inv);
+      rows.push(`<li><button type="button" class="t20tk-ui-button" data-action="couple" data-id="${item.id}" data-target="automato" ${why && !game.user.isGM ? 'disabled' : ''}>Acoplar</button> <b>Autômato</b> <span class="t20tk-bz-meta">${why ? escapeHtml(why) : '1º círculo, alvo 1 criatura ou objeto, ou área'}</span></li>`);
+    }
+    return `<details class="t20tk-disclosure" data-key="acoplar"><summary>Acoplar</summary><div class="t20tk-disclosure-body">
+      <ul class="t20tk-eng-couple">${rows.join('')}</ul>
+      <label class="t20tk-bz-check"><input type="checkbox" data-ui="pay" ${this.ui.pay ? 'checked' : ''}> Descontar T$ ${COUPLE_PRICE} da ficha (1 dia de trabalho)</label>
+    </div></details>`;
   }
 
   /* ----- Oficina ----- */
@@ -272,6 +318,7 @@ export class EngenhocasApp extends ApplicationV2 {
           <label><input type="radio" name="engMode" data-ui="mode" value="hand" ${this.ui.mode !== 'body' ? 'checked' : ''}><span>Empunhada</span></label>
           <label><input type="radio" name="engMode" data-ui="mode" value="body" ${this.ui.mode === 'body' ? 'checked' : ''}><span>Vestida</span></label>
         </div>
+        ${this.ui.mode === 'body' ? '<p class="t20tk-bz-note">Vestida conta no limite de itens vestidos, mas não ocupa o lugar da armadura: dá para vestir várias.</p>' : ''}
         <label class="t20tk-bz-check"><input type="checkbox" data-ui="roll" ${this.ui.roll ? 'checked' : ''}> Rolar Ofício (engenhoqueiro) contra CD ${check.dc}</label>
         <label class="t20tk-bz-check"><input type="checkbox" data-ui="pay" ${this.ui.pay ? 'checked' : ''}> Descontar T$ ${check.price} da ficha</label>
         ${check.ok ? '' : `<p class="t20tk-bz-warn">${escapeHtml(check.reason)}${game.user.isGM ? ' (o mestre pode criar mesmo assim)' : ''}</p>`}
@@ -382,6 +429,8 @@ export class EngenhocasApp extends ApplicationV2 {
   static async #onNewDay() { if (this.actor) await newDay(this.actor); }
   static async #onNewScene() { if (this.actor) await newScene(this.actor); }
   static #onOpenItem(event, target) { this.#item(target)?.sheet?.render(true); }
+  static async #onCouple(event, target) { const i = this.#item(target); if (i) await coupleEngenhoca(this.actor, i, target.dataset.target, { pay: this.ui.pay }); }
+  static async #onUncouple(event, target) { const i = this.#item(target); if (i) await uncoupleEngenhoca(i); }
   static #onPickAparato(event, target) { this.ui.aparato = target.dataset.type; this.ui.targets = []; this.render(); }
 
   static async #onInstall() {
