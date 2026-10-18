@@ -71,8 +71,8 @@ function normalizeAges(raw) {
 
 export const DEVOTION_MODES = Object.freeze(['off', 'race', 'class', 'both']);
 
-/** Regras de idade que o mestre liberou. */
-export const allowedAgeRules = rules => ['jda', 'herois'].filter(k => rules?.ages?.[k]);
+/** Regras de idade disponíveis: a do Livro Básico sempre; a de Heróis de Arton se o mestre liberou. */
+export const allowedAgeRules = rules => ['jda', 'herois'].filter(k => k === 'jda' || rules?.ages?.[k]);
 
 /** Regra de idade de um personagem: a que ele escolheu, se o mestre liberou. */
 export function ageRuleFor(choice, rules) {

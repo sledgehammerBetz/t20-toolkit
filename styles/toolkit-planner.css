@@ -283,3 +283,21 @@
 .t20tk-vk-dice li.is-set { border-left-color: var(--t20-success); }
 .t20tk-vk-die { display: grid; place-items: center; flex: 0 0 auto; width: 30px; height: 30px; border-radius: 6px; background: var(--t20-accent); color: var(--t20-text-on-accent, #fff); font-size: 15px; font-weight: 800; }
 .t20tk-bz .t20tk-vk-dice .t20tk-chip { min-width: 42px; height: 26px; min-height: 0; padding: 0 6px; font-size: 11px; }
+
+/* Vaga que abre o buscador (no lugar dos menus suspensos) */
+.t20tk-wz-pickslot { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 10px; border: 1px dashed var(--t20-border-subtle); border-radius: var(--t20-radius); }
+.t20tk-wz-pickslot.is-done { border-style: solid; border-color: var(--t20-accent); background: var(--t20-bg-selected); }
+.t20tk-wz-pickslot img, .t20tk-wz-pickslot .t20tk-wz-noimg { width: 32px; height: 32px; border-radius: var(--t20-radius-s); object-fit: cover; flex: 0 0 auto; }
+.t20tk-wz-pickslot b { flex: 1 1 auto; min-width: 0; }
+.t20tk-wz-pickslot .t20tk-lv-empty { flex: 1 1 auto; }
+.t20tk-wz-pickslot .t20tk-ui-button { margin-left: auto; flex: 0 0 auto; }
+.t20tk-wz-picker { display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 0; padding-top: 10px; }
+.t20tk-wz-picker .t20tk-lv-bhead .t20tk-bz-link { margin-left: auto; }
+.t20tk-wz-picker .t20tk-wz-split { flex: 1 1 auto; height: auto; min-height: 0; }
+
+/* Atribuição das rolagens por chips */
+.t20tk-pl .t20tk-ac--rolls { max-width: 900px; }
+.t20tk-pl .t20tk-ac--rolls .t20tk-ac-row { grid-template-columns: minmax(90px, .8fr) minmax(240px, 2.6fr) 16px minmax(110px, 1.2fr) 16px 56px; }
+.t20tk-ac-rolls .t20tk-wz-chips { justify-content: flex-start; gap: 4px; }
+.t20tk-ac-rolls .t20tk-chip { min-width: 0; padding: 0 8px; font-size: 12px; }
+.t20tk-ac-rolls .t20tk-chip:disabled { opacity: .35; }

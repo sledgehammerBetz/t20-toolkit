@@ -20,8 +20,8 @@ import { CASTER_CLASSES } from '../core/caster-rules.js';
 import {
   readCreation, raceInfo, creationSkills, creationIssues, ageFor, finalAttributes, originSlots, originSlot, slotPaths,
   otherAttributes, fxUuids, loadAttrEffects,
-  devotionContext, renderAttributes, renderAge, renderOriginItems, craftSelect, generalPowerOptions,
-  skillLabels, sel, sign
+  devotionContext, renderAttributes, renderAge, renderOriginItems, craftChips, pickButton,
+  skillLabels, sign
 } from './creation-view.js';
 
 const FLAG = `flags.${MODULE_ID}.plan.creation`;
@@ -162,10 +162,9 @@ function stepRaceChoices(app, cr, rules, info) {
     const rows = c.slots.map((slot, i) => {
       const p = picks[c.key]?.[i] ?? {};
       const base = `data-ability="${c.key}" data-slot="${i}"`;
-      const powerSel = group => {
-        const opts = idx.powers.filter(powerGroupFilter(group)).map(x => ({ value: x.uuid, label: `${x.name}${x.subtipo && group !== 'classe' ? ` (${x.subtipo})` : ''}${group === 'classe' ? ` — ${x.subtipo}` : ''}` }));
-        return `<select data-wzchoice ${base}><option value="">— escolha um poder —</option>${opts.map(o => `<option value="${escapeHtml(o.value)}" ${p.value === o.value ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}</select>`;
-      };
+      const path = `raceChoices.${c.key}.${i}.value`;
+      const powerSel = group => pickButton({ path, pool: group, title: `${c.name}: escolher poder`, item: idx.powers.find(x => x.uuid === p.value) });
+      const skillChips = list => chips('wzChoice', list.map(([k, l]) => ({ value: k, label: l })), p.value, base);
       const mode = (a, b) => `<div class="t20tk-wz-seg">${[['skill', a], ['power', b]].map(([m, l]) => `<button type="button" data-action="wzChoiceMode" ${base} data-value="${m}" aria-pressed="${(p.mode ?? 'skill') === m}">${l}</button>`).join('')}</div>`;
       switch (slot.kind) {
         case 'skill': return `<div class="t20tk-wz-row"><span>Perícia ${i + 1}</span><small class="t20tk-bz-meta">escolha na etapa Perícias (vaga "Raça")</small></div>`;
@@ -174,18 +173,18 @@ function stepRaceChoices(app, cr, rules, info) {
           return `<div class="t20tk-wz-row"><span>Perícia</span>${chips('wzChoice', opts, p.value, base)}</div>`;
         }
         case 'skillOrPower': return `<div class="t20tk-wz-row"><span>Vaga ${i + 1}</span>${mode('Perícia', 'Poder geral')}${(p.mode ?? 'skill') === 'power' ? powerSel(slot.power) : '<small class="t20tk-bz-meta">perícia na etapa Perícias</small>'}</div>`;
-        case 'bonusOrPower': return `<div class="t20tk-wz-row"><span>Vaga ${i + 1}</span>${mode('+2 em perícia', 'Poder da Tormenta')}${(p.mode ?? 'skill') === 'power' ? powerSel(slot.power) : `<select data-wzchoice ${base}><option value="">— perícia —</option>${Object.entries(labels).map(([k, l]) => `<option value="${k}" ${p.value === k ? 'selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select>`}</div>`;
+        case 'bonusOrPower': return `<div class="t20tk-wz-row"><span>Vaga ${i + 1}</span>${mode('+2 em perícia', 'Poder da Tormenta')}${(p.mode ?? 'skill') === 'power' ? powerSel(slot.power) : skillChips(Object.entries(labels))}</div>`;
         case 'power': return `<div class="t20tk-wz-row"><span>Poder</span>${powerSel(slot.power)}</div>`;
         case 'spell': {
-          const opts = spells.filter(spellSlotFilter(slot));
-          return `<div class="t20tk-wz-row"><span>Magia${slot.school ? ` (${SPELL_SCHOOLS[slot.school]})` : ''}</span><select data-wzchoice ${base}><option value="">— escolha uma magia de 1º círculo —</option>${opts.map(s => `<option value="${escapeHtml(s.uuid)}" ${p.value === s.uuid ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('')}</select></div>`;
+          const chosen = spells.find(x => x.uuid === p.value);
+          return `<div class="t20tk-wz-row"><span>Magia${slot.school ? ` (${SPELL_SCHOOLS[slot.school]})` : ''}</span>${pickButton({ path, pool: 'spell', title: `${c.name}: magia de 1º círculo`, item: chosen, type: slot.type ?? '', school: slot.school ?? '', asNote: !!slot.asNote })}</div>`;
         }
         case 'attr': return `<div class="t20tk-wz-row"><span>+1 em atributo</span><small class="t20tk-bz-meta">escolha na etapa <b>Atributos</b> (entra direto no total)</small></div>`;
         case 'attrDyn': return `<div class="t20tk-wz-row"><span>+1 em atributo</span><small class="t20tk-bz-meta">já faz parte dos atributos à escolha da raça (etapa Atributos)</small></div>`;
         case 'note': {
           if (slot.options) return `<div class="t20tk-wz-row"><span>${escapeHtml(slot.label)}</span>${chips('wzChoice', slot.options.map(o => ({ value: o, label: o })), p.value, base)}</div>`;
           const opts = Object.entries(labels).filter(([, l]) => !slot.crafts || /^of[íi]cio/i.test(fold(l)));
-          return `<div class="t20tk-wz-row"><span>${escapeHtml(slot.label)}</span><select data-wzchoice ${base}><option value="">— perícia —</option>${opts.map(([k, l]) => `<option value="${k}" ${p.value === k ? 'selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select></div>`;
+          return `<div class="t20tk-wz-row"><span>${escapeHtml(slot.label)}</span>${skillChips(opts)}</div>`;
         }
         default: return '';
       }
@@ -235,7 +234,7 @@ function stepOrigin(app, cr, rules, info) {
       detail = `<p class="t20tk-bz-note">${origin.region ? `Origem regional (${escapeHtml(origin.region)}) do ${escapeHtml(origin.source)}` : `Origem especial de ${escapeHtml(origin.source)}`}: benefício fixo.</p>
         ${origin.note ? `<p class="t20tk-bz-warn">${escapeHtml(origin.note)}</p>` : ''}
         <ul class="t20tk-wz-abil"><li><b>${escapeHtml(origin.fixed.power)}</b><small>${pw ? escapeHtml(strip(pw.description).replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, '$1')) : 'poder de origem — não está nos compêndios ativos'}</small></li>${origin.fixed.skills.length ? `<li><b>Treinado em</b><small>${origin.fixed.skills.map(escapeHtml).join(', ')}</small></li>` : ''}</ul>
-        ${needsCraft ? `<div class="t20tk-wz-row"><span>Qual Ofício</span>${craftSelect(P.craft, S.craft, labels)}</div>` : ''}`;
+        ${needsCraft ? `<div class="t20tk-wz-row"><span>Qual Ofício</span>${craftChips(P.craft, S.craft, labels)}</div>` : ''}`;
     } else {
       const need = Math.min(2, age.originBenefits ?? 2);
       const picks = new Set(S.picks);
@@ -249,17 +248,15 @@ function stepOrigin(app, cr, rules, info) {
       }).join('');
       const craftNeeded = [...picks].some(x => /^skill:of[íi]cio$/i.test(x.trim()));
       const generic = [...picks].find(x => x.startsWith('generic:'));
-      const genericSel = generic ? (() => {
-        const kind = /tormenta/i.test(generic) ? 'tormenta' : 'combate';
-        const opts = idx.powers.filter(x => x.tipo === 'geral' && fold(x.subtipo) === kind).map(x => ({ value: x.uuid, label: x.name }));
-        return `<div class="t20tk-wz-row"><span>${escapeHtml(generic.slice(8))}</span>${sel(P.choice, opts, S.choice, { attrs: 'data-wzfield' })}</div>`;
-      })() : '';
+      const genericSel = generic
+        ? `<div class="t20tk-wz-row"><span>${escapeHtml(generic.slice(8))}</span>${pickButton({ path: P.choice, pool: /tormenta/i.test(generic) ? 'tormenta' : 'combate', title: `${origin.name}: ${generic.slice(8)}`, item: idx.powers.find(x => x.uuid === S.choice) })}</div>`
+        : '';
       detail = `${origin.special ? `<p class="t20tk-bz-warn">${escapeHtml(origin.special)}</p>` : ''}
         <p class="t20tk-bz-note">Escolha <b>${need}</b> benefício${need > 1 ? 's' : ''} (${picks.size}/${need}).</p>
         <ul class="t20tk-wz-tiles">${skillTiles}${powerTiles}</ul>
-        ${craftNeeded ? `<div class="t20tk-wz-row"><span>Qual Ofício</span>${craftSelect(P.craft, S.craft, labels).replace('<select', '<select data-wzfield')}</div>` : ''}${genericSel}`;
+        ${craftNeeded ? `<div class="t20tk-wz-row"><span>Qual Ofício</span>${craftChips(P.craft, S.craft, labels)}</div>` : ''}${genericSel}`;
     }
-    detail = `<div class="t20tk-wz-detail"><h4>${escapeHtml(origin.name)}</h4>${detail}${(ORIGIN_ITEMS[origin.name] ?? []).length ? renderOriginItems(idx, origin.name, S, P).replace(/<select /g, '<select data-wzfield ') : ''}</div>`;
+    detail = `<div class="t20tk-wz-detail"><h4>${escapeHtml(origin.name)}</h4>${detail}${(ORIGIN_ITEMS[origin.name] ?? []).length ? renderOriginItems(idx, origin.name, S, P) : ''}</div>`;
   }
   const hasDetail = !!origin;
   return split(`${slotTabs}${selectedBar(`origin:${k}`, origin ? { name: origin.name } : null, origin ? `<small>${escapeHtml(origin.source)}</small>` : '')}${filterBox(app, 'origin', sources)}
@@ -460,6 +457,51 @@ function stepSummary(app, cr, rules, info, issues) {
   ${issues.length ? `<div class="t20tk-wz-issues"><b>Ainda falta</b><ul>${issues.map(i => `<li><button type="button" class="t20tk-bz-link" data-action="wzStep" data-step="${i.step}">${escapeHtml(i.text)}</button></li>`).join('')}</ul></div>` : '<p class="t20tk-bz-note">Tudo pronto. Se a raça tiver atributos à escolha, o sistema pergunta ao criar.</p>'}</div>`;
 }
 
+/* ---------- buscador de uma vaga (poder ou magia), no lugar dos menus suspensos ---------- */
+
+const SPELL_TYPES = { arc: 'Arcana', div: 'Divina', uni: 'Universal' };
+const POWER_KINDS = { geral: 'Poder geral', origem: 'Poder de origem', classe: 'Poder de classe' };
+const valueAt = (obj, path) => path.split('.').reduce((o, k) => o?.[k], obj);
+
+function renderPicker(app, cr) {
+  const w = wizardState(app);
+  const pk = w.pick;
+  const idx = app.index;
+  const f = fstate(app, 'pick');
+  const q = fold(w.q.pick ?? '');
+  const current = valueAt(cr, pk.path);
+  const text = p => strip(p.description).replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, '$1');
+  let filters = '', list, count;
+  if (pk.pool === 'spell') {
+    const all = (w.spells ?? []).filter(spellSlotFilter({ type: pk.type || undefined, school: pk.school || undefined }));
+    const rows = all.filter(s => (!q || s.key.includes(q)) && (!f.type || s.type === f.type) && (!f.school || s.school === f.school));
+    const types = [...new Set(all.map(s => s.type))].filter(t => SPELL_TYPES[t]);
+    const schools = [...new Set(all.map(s => s.school))].filter(Boolean).sort();
+    filters = `${types.length > 1 ? oneFilter(app, 'pick', 'type', 'Tipo', types.map(t => ({ value: t, label: SPELL_TYPES[t] }))) : ''}${schools.length > 1 ? oneFilter(app, 'pick', 'school', 'Escola', schools.map(v => ({ value: v, label: SPELL_SCHOOLS[v] ?? v }))) : ''}`;
+    count = `${rows.length} magias`;
+    list = rows.map(s => card({ img: s.img, name: s.name, sub: [SPELL_TYPES[s.type], SPELL_SCHOOLS[s.school], s.range, s.cost ? `${s.cost} PM` : ''].filter(Boolean).join(' · '), tags: [{ text: s.packLabel }], selected: current === s.uuid, value: s.uuid, kind: 'pick' })).join('');
+  } else {
+    const all = idx.powers.filter(powerGroupFilter(pk.pool));
+    const rows = all.filter(p => (!q || p.key.includes(q) || fold(text(p)).includes(q))
+      && (!f.kind || p.tipo === f.kind) && (!f.cat || p.tipo !== 'geral' || catOf(p) === f.cat) && (!f.cls || p.subtipo === f.cls));
+    const kinds = [...new Set(all.map(p => p.tipo))];
+    const hasGeneral = all.some(p => p.tipo === 'geral') && !['combate', 'tormenta'].includes(pk.pool);
+    const classes = pk.pool === 'classe' ? [...new Set(all.map(p => p.subtipo).filter(Boolean))].sort() : [];
+    const clsLabel = k => idx.classes.find(c => c.key === k)?.name ?? (k === 'geral' ? 'Qualquer classe' : k);
+    filters = `${kinds.length > 1 ? oneFilter(app, 'pick', 'kind', 'Grupo', kinds.map(k => ({ value: k, label: POWER_KINDS[k] ?? k }))) : ''}${hasGeneral ? oneFilter(app, 'pick', 'cat', 'Categoria', GENERAL_CATS.map(([value, label]) => ({ value, label }))) : ''}${classes.length ? oneFilter(app, 'pick', 'cls', 'Classe', classes.map(k => ({ value: k, label: clsLabel(k) }))) : ''}`;
+    count = `${rows.length} poderes`;
+    list = rows.map(p => {
+      const pre = prerequisiteText(p.description);
+      const t = text(p);
+      const tag = p.tipo === 'classe' ? clsLabel(p.subtipo) : p.tipo === 'geral' ? GENERAL_CATS.find(([k]) => k === catOf(p))?.[1] : POWER_KINDS[p.tipo];
+      return card({ img: p.img, name: p.name, sub: pre ? `Pré-requisitos: ${pre}` : (t.length > 140 ? `${t.slice(0, 140)}…` : t), tags: [{ text: tag ?? '' }, { text: p.packLabel }].filter(x => x.text), selected: current === p.uuid, value: p.uuid, kind: 'pick' });
+    }).join('');
+  }
+  const search = `<label class="t20tk-wz-field"><span>Buscar</span><input type="search" name="wzq-pick" data-wzq="pick" value="${escapeHtml(w.q.pick ?? '')}" placeholder="Nome ou texto…"></label>`;
+  return `<div class="t20tk-wz-picker"><header class="t20tk-lv-bhead"><button type="button" class="t20tk-ui-button" data-action="wzPickBack">← Voltar</button><h3>${escapeHtml(pk.title)}</h3>${current ? '<button type="button" class="t20tk-bz-link" data-action="wzPickClear">Tirar a escolha</button>' : ''}</header>
+    ${split(`${search}${filters}${clearBtn(app, 'pick')}`, `<header class="t20tk-wz-listhead"><span>${count}</span></header><ul class="t20tk-wz-list">${list || '<li class="t20tk-bz-empty">Nada com esse filtro.</li>'}</ul>`)}</div>`;
+}
+
 /* ---------- moldura do assistente ---------- */
 
 export function renderWizard(app) {
@@ -480,18 +522,20 @@ export function renderWizard(app) {
     return `<li><button type="button" data-action="wzStep" data-step="${s.id}" aria-current="${s.id === w.step ? 'step' : 'false'}" data-done="${done}"><span class="t20tk-wz-dot">${done ? '✔' : n + 1}</span>${escapeHtml(s.label)}</button></li>`;
   }).join('');
   const titles = { race: 'Raça', raceChoices: 'Escolhas da raça', age: 'Idade', attributes: 'Atributos', origin: 'Origem', class: 'Classe', skills: 'Perícias', complication: 'Complicação', god: 'Divindade', summary: 'Resumo' };
-  const body = {
+  if (w.pick && w.pick.step !== w.step) w.pick = null;
+  const bodyOf = {
     race: () => stepRace(app, cr, rules, info),
     raceChoices: () => stepRaceChoices(app, cr, rules, info),
-    age: () => `<div class="t20tk-wz-page">${renderAge(cr, rules, app.index, age).replace(/<select /g, '<select data-wzfield ').replace(/name="adultPower"/, 'name="adultPower" data-wzcheck="adultPower"')}</div>`,
-    attributes: () => `<div class="t20tk-wz-page">${renderAttributes(cr, rules, info.race, age, info.attrBonus, { info, other: otherAttributes(app.index, cr, rules, info) }).replace(/<select /g, '<select data-wzfield ').replace(/name="method"/g, 'name="method" data-wzmethod')}</div>`,
+    age: () => `<div class="t20tk-wz-page">${renderAge(cr, rules, app.index, age).replace(/name="adultPower"/, 'name="adultPower" data-wzcheck="adultPower"')}</div>`,
+    attributes: () => `<div class="t20tk-wz-page">${renderAttributes(cr, rules, info.race, age, info.attrBonus, { info, other: otherAttributes(app.index, cr, rules, info) }).replace(/name="method"/g, 'name="method" data-wzmethod')}</div>`,
     origin: () => stepOrigin(app, cr, rules, info),
     class: () => stepClass(app, cr, rules),
     skills: () => stepSkills(app, cr, rules, info),
     complication: () => stepComplication(app, cr),
     god: () => stepGod(app, cr, rules),
     summary: () => stepSummary(app, cr, rules, info, issues)
-  }[w.step]();
+  }[w.step];
+  const body = w.pick?.step === w.step ? renderPicker(app, cr) : bodyOf();
   const prev = list[i - 1], next = list[i + 1];
   const stepIssues = issues.filter(x => x.step === w.step);
   return `<div class="t20tk-wz">
@@ -556,6 +600,13 @@ export const WIZARD_ACTIONS = {
   async wzSelect(event, target) {
     const { kind, value } = target.dataset;
     const w = wizardState(this);
+    if (kind === 'pick') {
+      const path = w.pick?.path;
+      w.pick = null;
+      if (path) await patch(this, { [path]: value });
+      this.render();
+      return refreshAttrEffects(this);
+    }
     if (kind === 'race') await patch(this, { race: value, '-=raceMap': null, '-=raceChoices': null, '-=racePool': null });
     else if (kind === 'class') await patch(this, { cls: value, path: '', '-=classOneOf': null, classCraft: '', '-=skillPicks': null, complication: '', complicationPower: '' });
     else if (kind === 'god') await patch(this, { god: value, godPower: '' });
@@ -602,6 +653,38 @@ export const WIZARD_ACTIONS = {
   wzFilterOne(event, target) { fstate(this, target.dataset.kind)[target.dataset.key] = target.dataset.value; wizardState(this).view[target.dataset.kind] = 'list'; this.render(); },
   wzFilterClear(event, target) { const w = wizardState(this); const k = target.dataset.kind; w.f[k] = {}; w.q[k] = ''; w.src[k] = ''; this.render(); },
   wzCompTab(event, target) { wizardState(this).compTab = target.dataset.value; this.render(); },
+  async wzPickOpen(event, target) {
+    const w = wizardState(this);
+    const { path, pool, title, type, school } = target.dataset;
+    if (pool === 'spell') await ensureSpells(this);
+    w.pick = { step: w.step, path, pool, title, type, school };
+    w.f.pick = {};
+    w.q.pick = '';
+    this.render();
+  },
+  wzPickBack() { wizardState(this).pick = null; this.render(); },
+  async wzPickClear() { const w = wizardState(this); const path = w.pick?.path; w.pick = null; if (path) await patch(this, { [path]: '' }); this.render(); },
+  /** Chips que gravam um campo (no lugar dos menus suspensos). Clicar no escolhido limpa. */
+  async wzSet(event, target) {
+    const { field, value } = target.dataset;
+    const cr = readCreation(this.actor);
+    const cur = valueAt(cr, field);
+    const v = target.dataset.num ? Number(value) : value;
+    const same = String(cur ?? '') === String(value);
+    const special = {
+      ageRule: () => patch(this, { ageRule: value, age: 'jovem', ageComps: [], adultPower: false, agePower: '' }),
+      age: () => patch(this, { age: value, ageComps: [], adultPower: false })
+    };
+    if (special[field]) return special[field]();
+    await patch(this, { [field]: same ? '' : v });
+  },
+  async wzAgeComp(event, target) {
+    const age = ageFor(readCreation(this.actor), getTableRules());
+    const cur = (readCreation(this.actor).ageComps ?? []).filter(Boolean);
+    const v = target.dataset.value;
+    const next = cur.includes(v) ? cur.filter(x => x !== v) : (cur.length < age.complications ? [...cur, v] : cur);
+    await patch(this, { ageComps: next });
+  },
   wzSlot(event, target) { wizardState(this).slot = Number(target.dataset.value); this.render(); },
   async wzField(event, target) {
     const { field, value } = target.dataset;
@@ -646,21 +729,6 @@ export function bindWizard(app, root) {
     clearTimeout(timer);
     timer = setTimeout(() => { wizardState(app).q[input.dataset.wzq] = input.value; wizardState(app).view[input.dataset.wzq] = 'list'; app.render(); }, 150);
   }));
-  root.querySelectorAll('select[data-wzfield]').forEach(s => s.addEventListener('change', async () => {
-    const name = s.name;
-    const special = {
-      ageRule: v => patch(app, { ageRule: v, age: 'jovem', ageComps: [], adultPower: false, agePower: '' }),
-      age: v => patch(app, { age: v, ageComps: [], adultPower: false }),
-      complication: v => patch(app, { complication: v, complicationPower: '' })
-    };
-    if (special[name]) return special[name](s.value);
-    const dot = name.indexOf('.');
-    const group = dot > 0 ? name.slice(0, dot) : '';
-    if (group === 'assign') return patch(app, { [name]: s.value === '' ? '' : Number(s.value) });
-    if (group === 'ageComps') { const list = [...(readCreation(app.actor).ageComps ?? [])]; list[Number(name.slice(dot + 1))] = s.value; return patch(app, { ageComps: list }); }
-    return patch(app, { [name]: s.value });
-  }));
-  root.querySelectorAll('select[data-wzchoice]').forEach(s => s.addEventListener('change', () => patch(app, { [`raceChoices.${s.dataset.ability}.${s.dataset.slot}.value`]: s.value })));
   root.querySelectorAll('input[data-wzmethod]').forEach(r => r.addEventListener('change', () => patch(app, { method: r.value, '-=assign': null })));
   root.querySelectorAll('input[data-wzcheck]').forEach(cb => cb.addEventListener('change', () => patch(app, { [cb.dataset.wzcheck]: cb.checked })));
 }

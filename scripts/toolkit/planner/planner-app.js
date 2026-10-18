@@ -19,7 +19,7 @@ import { getTableRules } from '../core/table-rules.js';
 import { skillLabels } from './creation-view.js';
 import { applyCreation, rollCreationAttributes, undoCreation, stepCreationAttribute } from './creation-view.js';
 import { renderWizard, bindWizard, WIZARD_ACTIONS } from './creation-wizard.js';
-import { renderLevelEditor, bindLevelEditor, LEVEL_ACTIONS, renderExtraPage, aumentoAttr } from './level-view.js';
+import { renderLevelEditor, bindLevelEditor, LEVEL_ACTIONS, renderExtraPage, aumentoAttr, intSkillGain } from './level-view.js';
 import { renderDoneLevel, RETRAIN_ACTIONS } from './retrain-view.js';
 
 const ApplicationV2 = globalThis.foundry?.applications?.api?.ApplicationV2 ?? class {};
@@ -97,6 +97,14 @@ export class PlannerApp extends ApplicationV2 {
       const label = sk.label || globalThis.CONFIG?.T20?.pericias?.[key]?.label || key;
       skills.add(norm(game.i18n?.localize?.(label) ?? label));
     }
+    // Perícias de Inteligência planejadas em níveis anteriores também contam.
+    for (const row of c.timeline) {
+      if (row.done || row.level >= level) continue;
+      for (const key of c.plan[row.level]?.intSkills ?? []) {
+        const label = globalThis.CONFIG?.T20?.pericias?.[key]?.label ?? key;
+        skills.add(norm(game.i18n?.localize?.(label) ?? label));
+      }
+    }
     const attributes = Object.fromEntries(Object.entries(actor?.system?.atributos ?? {}).map(([k, v]) => [k, Number(v?.value) || 0]));
     // Aumento de Atributo planejado em níveis anteriores já conta para os pré-requisitos.
     for (const row of c.timeline) {
@@ -171,7 +179,8 @@ export class PlannerApp extends ApplicationV2 {
         title = `${r.cls} ${r.classLevel}`;
         sub = [...new Set(g.gains.map(x => KIND[x.kind]).filter(Boolean))].join(', ') || 'só o nível';
         const picks = c.plan[r.level]?.picks ?? {};
-        const missing = g.gains.some(x => ['power', 'path'].includes(x.kind) && !picks[x.id]);
+        const ig = intSkillGain(this, r.level);
+        const missing = g.gains.some(x => ['power', 'path'].includes(x.kind) && !picks[x.id]) || ig.picks.length < ig.want;
         status = missing ? 'missing' : 'ok';
       } else { title = 'Sem classe'; sub = r.level === c.current + 1 ? 'próximo nível' : 'sem plano'; status = r.level === c.current + 1 ? 'next' : 'empty'; }
       return `<li><button type="button" data-action="pickLevel" data-level="${r.level}" aria-current="${sel ? 'step' : 'false'}" data-state="${status}">
@@ -310,7 +319,9 @@ export class PlannerApp extends ApplicationV2 {
     const row = c.timeline.find(r => r.level === level);
     const entry = c.plan[level] ?? {};
     const g = gainsAt(row.cls, row.classLevel);
-    const missing = g.gains.filter(x => (x.kind === 'power' || x.kind === 'path') && !entry.picks?.[x.id]);
+    const missing = g.gains.filter(x => (x.kind === 'power' || x.kind === 'path') && !entry.picks?.[x.id]).map(x => x.label);
+    const ig = intSkillGain(this, level);
+    if (ig.picks.length < ig.want) missing.push(`${ig.want - ig.picks.length} perícia(s) por Inteligência`);
     const summary = [];
     const ctx = this.prereqContext(level);
     const unmet = Object.values(entry.picks ?? {}).filter(Boolean).map(u => this.index.powers.find(p => p.uuid === u))
@@ -318,7 +329,7 @@ export class PlannerApp extends ApplicationV2 {
     const ok = await foundry.applications.api.DialogV2.confirm({
       window: { title: `Aplicar ${level}º nível` },
       content: `<p>Subir <b>${escapeHtml(actor.name)}</b> para o ${level}º nível como <b>${escapeHtml(row.cls)} ${row.classLevel}</b>?</p>
-        ${missing.length ? `<p>Ainda sem escolha: ${missing.map(x => escapeHtml(x.label)).join(', ')}. Você pode adicionar depois pela ficha.</p>` : ''}
+        ${missing.length ? `<p>Ainda sem escolha: ${missing.map(x => escapeHtml(x)).join(', ')}. Você pode adicionar depois pela ficha.</p>` : ''}
         ${unmet.length ? `<p><b>Pré-requisitos não cumpridos:</b> ${unmet.map(p => escapeHtml(p.name)).join(', ')}. Confirme com o mestre.</p>` : ''}`,
       rejectClose: false
     });
@@ -359,14 +370,21 @@ export class PlannerApp extends ApplicationV2 {
         created.push(...docs.map(d => d.id));
         summary.push(...docs.map(d => d.name));
       }
+      // 3) Perícias novas pelo Aumento de Atributo (Inteligência)
+      const trained = ig.picks.filter(k => !actor.system?.pericias?.[k]?.treinado);
+      if (trained.length) {
+        await actor.update(Object.fromEntries(trained.map(k => [`system.pericias.${k}.treinado`, true])));
+        const labels = skillLabels();
+        summary.push(...trained.map(k => `Treinado em ${labels[k] ?? k}`));
+      }
       await actor.update({
-        [`flags.${MODULE_ID}.history.${level}`]: { cls: row.cls, classLevel: row.classLevel, classId, classCreated, created },
+        [`flags.${MODULE_ID}.history.${level}`]: { cls: row.cls, classLevel: row.classLevel, classId, classCreated, created, trained },
         [`flags.${MODULE_ID}.plan.levels.-=${level}`]: null
       });
       const createdDocs = created.map(id => actor.items.get(id)).filter(Boolean);
       await postCard(actor, {
         tool: 'planner', tone: 'success', title: `${level}º nível`, subtitle: `${actor.name} · ${row.cls} ${row.classLevel}`,
-        itemsTitle: 'Adicionado à ficha', items: (createdDocs.length ? createdDocs : summary.map(n => ({ name: n }))).map(d => ({ name: d.name, img: d.img })),
+        itemsTitle: 'Adicionado à ficha', items: [...createdDocs, ...trained.map(k => ({ name: `Treinado em ${skillLabels()[k] ?? k}` }))].map(d => ({ name: d.name, img: d.img })),
         note: g.gains.some(x => x.kind === 'spells') ? 'Escolha as magias novas no Buscador.' : ''
       });
       this.selected = Math.min(level + 1, 20);
@@ -397,6 +415,7 @@ export class PlannerApp extends ApplicationV2 {
     const ids = (h.created ?? []).filter(id => actor.items.get(id));
     if (h.classCreated && actor.items.get(h.classId)) ids.push(h.classId);
     if (ids.length) await actor.deleteEmbeddedDocuments('Item', ids);
+    if (h.trained?.length) await actor.update(Object.fromEntries(h.trained.map(k => [`system.pericias.${k}.treinado`, false])));
     if (!h.classCreated) {
       const cls = actor.items.get(h.classId);
       if (cls) await cls.update({ 'system.niveis': Math.max(1, (parseInt(cls.system.niveis) || 1) - 1) });
