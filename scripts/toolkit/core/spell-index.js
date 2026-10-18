@@ -75,10 +75,10 @@ export async function getGrantedPowerIndex({ refresh = false, gameRef = globalTh
   const out = [];
   for (const pack of spellPacks(gameRef)) {
     try {
-      const index = await pack.getIndex({ fields: ['system.tipo', 'system.subtipo'] });
+      const index = await pack.getIndex({ fields: ['system.tipo', 'system.subtipo', 'system.description.value'] });
       for (const e of index) {
         if (e.type !== 'poder' || e.system?.tipo !== 'concedido') continue;
-        out.push(Object.freeze({ uuid: e.uuid ?? `Compendium.${pack.collection}.Item.${e._id}`, name: e.name, key: fold(e.name), img: e.img, packLabel: pack.metadata?.label ?? pack.collection }));
+        out.push(Object.freeze({ uuid: e.uuid ?? `Compendium.${pack.collection}.Item.${e._id}`, name: e.name, key: fold(e.name), img: e.img, description: e.system?.description?.value ?? '', packLabel: pack.metadata?.label ?? pack.collection }));
       }
     } catch (error) {
       console.warn(`[T20 Toolkit] Não foi possível ler poderes de ${pack.collection}:`, error);
