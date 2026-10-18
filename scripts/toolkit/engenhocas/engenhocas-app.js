@@ -144,11 +144,11 @@ export class EngenhocasApp extends ApplicationV2 {
     const warns = [];
     if (!inv.level) warns.push('A ficha não tem nível de inventor.');
     if (!inv.engenhoqueiro) warns.push('Falta o poder Engenhoqueiro.');
-    if (!inv.skillTrained) warns.push('Ofício (engenhoqueiro) não está treinado.');
+    if (!inv.skillTrained && !activationSubstitutes(this.actor).length) warns.push('Ofício (engenhoqueiro) não está treinado.');
     const n = this.items().length;
     const pm = this.actor.system?.attributes?.pm ?? {};
     const powers = [['chutes', 'Chutes e Palavrões'], ['potente', 'Invenção Potente'], ['maestria', 'Maestria em Perícia'], ['manutencao', 'Manutenção Eficiente'], ['personalizado', 'Aparato Personalizado'], ['mecanizada', 'Armadura Mecanizada'], ['avancada', 'Armadura Avançada'], ['automatoEng', 'Autômato Engenhocado'], ['calibrar', 'Forçar a Calibragem'], ['rapida', 'Ativação Rápida'], ['goblinoide', 'Engenhocaria Goblinoide']].filter(([k]) => inv[k]).map(([, l]) => l)
-    for (const sub of activationSubstitutes(this.actor)) if (!powers.includes(sub.source)) powers.push(`${sub.source} (ativa com ${sub.label})`);
+    for (const sub of activationSubstitutes(this.actor)) if (!powers.includes(sub.source)) powers.push(`${sub.source} (usa ${sub.label} para fabricar e ativar)`);
     return `<section class="t20tk-eng-status">
       <div class="t20tk-metrics">
         ${metric('Círculo máximo', inv.maxCircle ? `${inv.maxCircle}º` : '—')}
@@ -320,7 +320,7 @@ export class EngenhocasApp extends ApplicationV2 {
           <label><input type="radio" name="engMode" data-ui="mode" value="body" ${this.ui.mode === 'body' ? 'checked' : ''}><span>Vestida</span></label>
         </div>
         ${this.ui.mode === 'body' ? '<p class="t20tk-bz-note">Vestida conta no limite de itens vestidos, mas não ocupa o lugar da armadura: dá para vestir várias.</p>' : ''}
-        <label class="t20tk-bz-check"><input type="checkbox" data-ui="roll" ${this.ui.roll ? 'checked' : ''}> Rolar Ofício (engenhoqueiro) contra CD ${check.dc}</label>
+        <label class="t20tk-bz-check"><input type="checkbox" data-ui="roll" ${this.ui.roll ? 'checked' : ''}> Fazer o teste de fabricação contra CD ${check.dc} (Ofício ou a perícia que um poder libera)</label>
         <label class="t20tk-bz-check"><input type="checkbox" data-ui="pay" ${this.ui.pay ? 'checked' : ''}> Descontar T$ ${check.price} da ficha</label>
         ${check.ok ? '' : `<p class="t20tk-bz-warn">${escapeHtml(check.reason)}${game.user.isGM ? ' (o mestre pode criar mesmo assim)' : ''}</p>`}
         <button type="button" class="t20tk-ui-button t20tk-ui-button--primary" data-action="craft" ${canCraft ? '' : 'disabled'}>Fabricar engenhoca</button>

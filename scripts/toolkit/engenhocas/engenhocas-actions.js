@@ -47,14 +47,6 @@ async function patchFlags(item, patch, unset = []) {
   return item.update(upd);
 }
 
-async function rollSkill(actor, bonus = 0) {
-  const skill = actor.system?.pericias?.[SKILL_KEY];
-  const value = Number(skill?.value) || 0;
-  const roll = new Roll(`1d20 + ${value}${bonus ? ` + ${bonus}` : ''}`);
-  await roll.evaluate();
-  return roll;
-}
-
 /* ---------- fabricar ---------- */
 
 /**
@@ -72,9 +64,13 @@ export async function craftEngenhoca(actor, { uuid, name = '', mode = 'hand', ro
   const finalName = name.trim() || `${spell.name} (engenhoca)`;
 
   if (roll) {
-    const r = await rollSkill(actor);
-    const ok = r.total >= check.dc;
-    await r.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: chatFlavor({ tool: 'engenhocas', title: `Fabricar ${finalName}`, result: `Ofício (engenhoqueiro) contra CD ${check.dc}: ${ok ? 'sucesso' : 'falha'}`, tone: ok ? 'success' : 'error' }) });
+    // Mesmo teste da ativação: perícia substituta (Artesão Criativo…), efeitos e bônus de poderes, escolher 10 / 0.
+    const choice = await confirmActivation(actor, null, { aparatos: [], coupled: null, mode }, inv, { spellPM: 0, powerPM: 0, powers: new Set(), ownFx: new Set(), craft: { dc: check.dc, pm: check.pm, title: `Fabricar ${finalName}` } });
+    if (!choice) return null;
+    if (choice.cost.total > pmNow(actor)) return ui.notifications.warn(`PM insuficientes: o teste custa ${choice.cost.total} PM.`);
+    const r = await rollActivation(actor, null, choice.test, check.dc, choice.take, `Fabricar ${finalName}`, ['sucesso', 'falha']);
+    if (choice.cost.total) await actor.spendMana(choice.cost.total, 0, false);
+    const ok = r.success;
     if (!ok) {
       await postCard(actor, { tool: 'engenhocas', tone: 'error', title: 'Fabricação falhou', subtitle: finalName, rows: [['Teste', `${r.total} contra CD ${check.dc}`]], note: 'Nada foi descontado. Confira com o mestre se houve perda de material.' });
       return null;
@@ -167,7 +163,7 @@ const coupledArmor = (actor, st) => (st.coupled?.kind === 'armor' ? actor.items.
  * Monta o teste com as escolhas `c` = { skill, fx, text, extra, calibrar }.
  * Devolve { skill, skills, substitutes, effects, texts, parts, bonus, fixed, formula, pmCost }.
  */
-export function activationTest(actor, st, inv, c) {
+export function activationTest(actor, st, inv, c, { craft = false } = {}) {
   const skills = sheetSkills(actor);
   const enge = skills.find(s => s.key === SKILL_KEY) ?? { key: SKILL_KEY, label: 'Ofício (engenhoqueiro)', value: 0, pda: true };
   const substitutes = activationSubstitutes(actor, skills);
@@ -183,38 +179,43 @@ export function activationTest(actor, st, inv, c) {
     for (const v of ef.adds) extras.push({ label: ef.name, value: Number(v) ? Number(v) * qty : v });
   }
   for (const t of texts) if (c.text?.[t.id] && !t.onSheet) extras.push({ label: t.source, value: t.value });
-  const armor = inv.avancada ? coupledArmor(actor, st) : null;
-  extras.push(...activationExtras({ pda: inv.pda, pdaInSkill: skill.pda, giroscopio: st.aparatos.includes('giroscopio'), calibrar: c.calibrar, armorUpgrades: armor ? armorUpgradeCount(armor.system?.upgrades) : 0 }));
+  // Fabricar não sofre penalidade de armadura (só a ativação sofre): devolve o que a ficha descontou.
+  const pda = Math.min(0, Number(inv.pda) || 0);
+  if (craft && pda && skill.pda) extras.push({ label: 'Sem penalidade de armadura (fabricação)', value: -pda });
+  const armor = !craft && inv.avancada ? coupledArmor(actor, st) : null;
+  if (!craft) extras.push(...activationExtras({ pda: inv.pda, pdaInSkill: skill.pda, giroscopio: st.aparatos.includes('giroscopio'), calibrar: c.calibrar, armorUpgrades: armor ? armorUpgradeCount(armor.system?.upgrades) : 0 }));
   if (c.extra) extras.push({ label: 'Outros', value: Number(c.extra) || 0 });
   const parts = testParts({ skillLabel: skill.key === SKILL_KEY ? 'Ofício (engenhoqueiro)' : skill.label, skillValue: skill.value, extras });
   return { skill, skills, substitutes, effects, texts, parts, bonus: fixedBonus(parts), fixed: allFixed(parts), formula: testFormula(parts), pmCost: Math.max(0, pmCost) };
 }
 
-/** Resultado garantido ou chance pelo modo: 'roll' (d20), 'ten' (Maestria em Perícia) ou 'zero'. */
+/** Resultado garantido ou chance pelo modo: 'roll' (d20), 'ten' (escolher 10) ou 'zero'. */
 const chanceFor = (take, dc, bonus) => (take === 'zero' ? 100 : take === 'ten' ? (10 + bonus >= dc ? 100 : 0) : chanceOf(dc, bonus));
 
 /**
  * Diálogo da ativação: CD aberta, teste (perícia, efeitos, bônus de poderes), opções e custo.
  * `sys` = o que já veio da janela do sistema: { spellPM, powerPM, powers: Set, ownFx: Set de chaves com efeito na ficha }.
- * Devolve as escolhas ou null.
+ * Fabricação usa o mesmo diálogo com `sys.craft` = { dc, pm, title }: sem opções de ativação e com escolher 10 livre
+ * (fabricar não é situação de pressão). Devolve as escolhas ou null.
  */
 async function confirmActivation(actor, item, st, inv, sys) {
+  const craft = sys.craft ?? null;
   const has = id => st.aparatos.includes(id);
   const saved = actor.getFlag?.(MODULE_ID, TEST_FLAG) ?? {};
   const c = { skill: saved.skill || SKILL_KEY, fx: { ...(saved.fx ?? {}) }, text: { ...(saved.text ?? {}) }, extra: 0, take: 'roll', refrigeration: false, calibrar: sys.powers.has('calibrar'), potente: false, rapida: false };
   // Poderes com efeito na ficha já foram escolhidos na janela do sistema; sem efeito, o Toolkit oferece aqui.
-  const options = [
+  const options = craft ? [] : [
     has('sistema-refrigeracao') && !st.refrigerationUsedToday ? ['refrigeration', 'Sistema de Refrigeração', '−5 na CD por 1 PM (ação completa, 1× por dia)'] : null,
     inv.calibrar && !sys.powers.has('calibrar') ? ['calibrar', 'Forçar a Calibragem', '−5 no teste, +2 na CD para resistir'] : null,
     inv.potente && !sys.ownFx.has('potente') ? ['potente', 'Invenção Potente', '+1 PM, +2 na CD para resistir'] : null,
     inv.rapida && !sys.ownFx.has('rapida') ? ['rapida', 'Ativação Rápida', '+2 PM, ativa com ação de movimento'] : null
   ].filter(Boolean);
   const calc = () => {
-    const test = activationTest(actor, st, inv, c);
-    const dc = activationDC(st, { upgradePM: sys.spellPM, personalizado: inv.personalizado, refrigeration: c.refrigeration });
+    const test = activationTest(actor, st, inv, c, { craft: !!craft });
+    const dc = craft ? { dc: craft.dc, parts: [['Base', 20], ['Magia', craft.pm]] } : activationDC(st, { upgradePM: sys.spellPM, personalizado: inv.personalizado, refrigeration: c.refrigeration });
     if (c.take === 'zero' && !canChooseZero(dc.dc, test.parts)) c.take = 'roll';
-    if (c.take === 'ten' && !inv.maestria) c.take = 'roll';
-    const cost = activationCost({ upgradePM: sys.spellPM, powerPM: sys.powerPM + test.pmCost, comutador: has('comutador'), refrigeration: c.refrigeration, rapida: c.rapida, potente: c.potente, maestria: c.take === 'ten' });
+    if (c.take === 'ten' && !inv.maestria && !craft) c.take = 'roll';
+    const cost = activationCost({ upgradePM: sys.spellPM, powerPM: sys.powerPM + test.pmCost, comutador: has('comutador'), refrigeration: c.refrigeration, rapida: c.rapida, potente: c.potente, maestria: c.take === 'ten' && !craft });
     return { test, dc, cost, chance: chanceFor(c.take, dc.dc, test.bonus) };
   };
   const body = () => {
@@ -238,7 +239,8 @@ async function confirmActivation(actor, item, st, inv, sys) {
     const fromSys = [...sys.powers].map(k => ({ calibrar: 'Forçar a Calibragem (−5 no teste)', potente: 'Invenção Potente', rapida: 'Ativação Rápida', avancada: 'Armadura Avançada (ação livre)', automato: 'Autômato Engenhocado' })[k]).filter(Boolean);
     const zeroOk = canChooseZero(dc.dc, test.parts);
     const takes = [chip('take', 'roll', c.take === 'roll', 'Rolar'),
-      inv.maestria ? chip('take', 'ten', c.take === 'ten', 'Escolher 10 (Maestria em Perícia, 1 PM)', 'Só se Ofício (engenhoqueiro) for uma das perícias escolhidas no poder') : '',
+      craft ? chip('take', 'ten', c.take === 'ten', 'Escolher 10', 'Fabricar não é situação de pressão')
+        : inv.maestria ? chip('take', 'ten', c.take === 'ten', 'Escolher 10 (Maestria em Perícia, 1 PM)', 'Só se a perícia for uma das escolhidas no poder') : '',
       zeroOk ? chip('take', 'zero', c.take === 'zero', 'Escolher 0', `O resultado é só o bônus (${test.bonus}): passa sem rolar, sem acerto crítico nem falha crítica`) : ''].join('');
     const formula = c.take === 'zero' ? `0 + ${test.bonus}` : c.take === 'ten' ? test.formula.replace(/^1d20/, '10') : test.formula;
     return `<p><b>CD ${dc.dc}</b> = ${dc.parts.map(([k, v], i) => `${i ? (v >= 0 ? ' + ' : ' − ') : ''}${Math.abs(v)} <small>(${escapeHtml(k.toLowerCase())})</small>`).join('')}</p>
@@ -252,7 +254,7 @@ async function confirmActivation(actor, item, st, inv, sys) {
       <div class="t20tk-wz-chips">${takes}</div>
       <p>Teste: <b>${escapeHtml(formula)}</b> · chance <b>${chance}%</b> · PM: <b>${cost.total}</b> (você tem ${pmNow(actor)})</p>
       ${zeroOk ? '' : '<p class="t20tk-bz-meta">Escolher 0 aparece quando o bônus já alcança a CD.</p>'}
-      ${st.coupled?.kind === 'armor' ? '<p class="t20tk-bz-note">Acoplada na armadura: não precisa estar empunhada nem vestida.</p>' : st.coupled?.kind === 'automato' ? '<p class="t20tk-bz-note">Acoplada no autômato: com Autômato Engenhocado (+2 PM, ação de movimento), o efeito sai do autômato (alcance curto).</p>' : st.mode === 'hand' ? '<p class="t20tk-bz-note">Engenhoca empunhada: precisa de uma mão livre.</p>' : ''}`;
+      ${craft ? '<p class="t20tk-bz-note">Fabricar não sofre penalidade de armadura. Falhou: nada é descontado.</p>' : st.coupled?.kind === 'armor' ? '<p class="t20tk-bz-note">Acoplada na armadura: não precisa estar empunhada nem vestida.</p>' : st.coupled?.kind === 'automato' ? '<p class="t20tk-bz-note">Acoplada no autômato: com Autômato Engenhocado (+2 PM, ação de movimento), o efeito sai do autômato (alcance curto).</p>' : st.mode === 'hand' ? '<p class="t20tk-bz-note">Engenhoca empunhada: precisa de uma mão livre.</p>' : ''}`;
   };
   const read = el => {
     const n = el.name;
@@ -264,11 +266,11 @@ async function confirmActivation(actor, item, st, inv, sys) {
     else c[n] = el.checked;
   };
   const result = await DialogV2().wait({
-    window: { title: `Ativar ${item.name}` },
+    window: { title: craft ? craft.title : `Ativar ${item.name}` },
     content: `<div class="t20tk-eng-confirm">${body()}</div>`,
     rejectClose: false,
     buttons: [
-      { action: 'go', label: 'Ativar', default: true, callback: () => ({ ...c, ...calc() }) },
+      { action: 'go', label: craft ? 'Fabricar' : 'Ativar', default: true, callback: () => ({ ...c, ...calc() }) },
       { action: 'cancel', label: 'Cancelar', callback: () => null }
     ],
     render: (event, dialog) => {
@@ -281,14 +283,14 @@ async function confirmActivation(actor, item, st, inv, sys) {
 }
 
 /** Rola (ou escolhe 10 / 0) o teste e posta no chat. Devolve { total, natural, success }. */
-async function rollActivation(actor, item, test, dc, take, title = item.name) {
+async function rollActivation(actor, item, test, dc, take, title = item.name, [ok, ko] = ['ativou', 'falhou']) {
   if (take === 'zero') {
-    await postCard(actor, { tool: 'engenhocas', tone: 'success', title, subtitle: 'escolheu 0: ativou', rows: [['Resultado', `${test.bonus} (só o bônus)`], ['CD', String(dc)]], note: 'Sem rolar o d20: não há acerto crítico nem falha crítica.' });
+    await postCard(actor, { tool: 'engenhocas', tone: 'success', title, subtitle: `escolheu 0: ${ok}`, rows: [['Resultado', `${test.bonus} (só o bônus)`], ['CD', String(dc)]], note: 'Sem rolar o d20: não há acerto crítico nem falha crítica.' });
     return { total: test.bonus, natural: null, success: true };
   }
   const roll = await new Roll(take === 'ten' ? test.formula.replace(/^1d20/, '10') : test.formula).evaluate();
   const success = roll.total >= dc;
-  await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: chatFlavor({ tool: 'engenhocas', title, result: `${test.skill.key === SKILL_KEY ? 'Ofício (engenhoqueiro)' : test.skill.label}${take === 'ten' ? ' (escolheu 10)' : ''} contra CD ${dc}: ${success ? 'ativou' : 'falhou'}`, tone: success ? 'success' : 'error' }) });
+  await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: chatFlavor({ tool: 'engenhocas', title, result: `${test.skill.key === SKILL_KEY ? 'Ofício (engenhoqueiro)' : test.skill.label}${take === 'ten' ? ' (escolheu 10)' : ''} contra CD ${dc}: ${success ? ok : ko}`, tone: success ? 'success' : 'error' }) });
   return { total: roll.total, natural: take === 'ten' ? null : roll.dice?.[0]?.total, success };
 }
 
