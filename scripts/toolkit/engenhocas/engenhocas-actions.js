@@ -14,7 +14,7 @@ import { skillSubstitutes, textBonuses, testParts, fixedBonus, allFixed, testFor
 import {
   FLAG_SCOPE, FLAG_KEY, SKILL_KEY, APARATO_BY_ID, ENGENHOCA_ITEM_TYPE, COUPLE_PRICE, isEngenhoca, engenhocaState, engenhocaFlags, inventorContext,
   activationDC, activationExtras, activationCost, resistanceBonus, outcomePatch, NEW_DAY_PATCH, aparatoBlocker, buildEngenhocaItem, craftCheck,
-  splitApplied, powerEffectKey, armorUpgradeCount, armorCapacity, coupleBlocker
+  splitApplied, powerEffectKey, armorUpgradeCount, armorCapacity, coupleBlocker, actorEngenhocas
 } from './engenhocas-rules.js';
 
 const DialogV2 = () => foundry.applications.api.DialogV2;
@@ -34,7 +34,7 @@ export function actorInventor(actor) {
   });
 }
 
-export const actorEngenhocas = actor => [...(actor?.items ?? [])].filter(isEngenhoca).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+export { actorEngenhocas };
 
 const money = actor => Number(actor?.system?.dinheiro?.tp) || 0;
 const pmNow = actor => (Number(actor?.system?.attributes?.pm?.value) || 0) + (Number(actor?.system?.attributes?.pm?.temp) || 0);

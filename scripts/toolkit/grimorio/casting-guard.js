@@ -4,7 +4,7 @@
  * da classe de documento do sistema. Configurável pelo mestre: desligado, avisar, bloquear.
  */
 import { MODULE_ID } from '../../constants.js';
-import { isMago } from './grimorio-app.js';
+import { isMago } from './grimorio-state.js';
 import { escapeHtml } from '../core/t20.js';
 
 export const GUARD_SETTING = 'grimorioGuard';

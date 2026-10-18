@@ -14,6 +14,7 @@ import { postCard } from '../ui/chat.js';
 import { SPELL_SCHOOLS, escapeHtml, actorSpells, arcanistPaths, actorClasses } from '../core/t20.js';
 import { magoSpells, memorizationLimit, dayKey, validateStudy } from './grimorio-rules.js';
 import { toolFrame, onNavigate, switchTheme, reopen } from '../ui/frame.js';
+import { readGrimorio, isMago } from './grimorio-state.js';
 
 const ApplicationV2 = globalThis.foundry?.applications?.api?.ApplicationV2 ?? class {};
 
@@ -21,13 +22,7 @@ export function today() {
   return dayKey(game.time?.components, game.time?.worldTime);
 }
 
-export function readGrimorio(actor) {
-  return actor?.getFlag?.(MODULE_ID, 'grimorio') ?? {};
-}
-
-export function isMago(actor) {
-  return arcanistPaths(actor).includes('mago');
-}
+export { readGrimorio, isMago };
 
 export class GrimorioApp extends ApplicationV2 {
   static DEFAULT_OPTIONS = {

@@ -10,6 +10,7 @@ import { MODULE_ID } from '../../constants.js';
 import { SPELL_TYPES, SPELL_SCHOOLS, CIRCLES, fold, escapeHtml, actorClasses, arcanistPaths, actorSpells } from '../core/t20.js';
 import { buildCasterProfiles, evaluateSpell, learningCapacity, necromancerRatioOk, CASTER_CLASSES } from '../core/caster-rules.js';
 import { getSpellCatalog } from '../core/spells/spell-catalog.js';
+import { readSchools, casterContext } from '../core/caster-context.js';
 import { refreshCompendiumIndex } from '../core/spell-index.js';
 import { filterSpells, filterOptions, EMPTY_FILTERS } from '../core/spells/spell-filter.js';
 import { spellFilterPanel, bindSpellFilterPanel, viaTags } from '../ui/spell-filter-panel.js';
@@ -25,17 +26,7 @@ function t20Label(map, key) {
 }
 const STATUS_LABEL = { allowed: 'Pode aprender', review: 'Conferir', blocked: 'Fora da regra', owned: 'Na ficha' };
 
-/** Escolas de Bardo/Druida ficam numa flag do módulo, por classe. */
-export function readSchools(actor) {
-  return actor?.getFlag?.(MODULE_ID, 'casting.schools') ?? {};
-}
-
-export function casterContext(actor) {
-  const classes = actorClasses(actor);
-  const profiles = buildCasterProfiles({ classes, arcanistPaths: arcanistPaths(actor), schoolsByClass: readSchools(actor) });
-  const known = actorSpells(actor);
-  return { classes, profiles, known, capacity: learningCapacity(profiles, known) };
-}
+export { readSchools, casterContext };
 
 export class BuscadorApp extends ApplicationV2 {
   static DEFAULT_OPTIONS = {

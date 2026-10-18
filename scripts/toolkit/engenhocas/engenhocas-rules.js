@@ -342,3 +342,6 @@ export function inventorContext({ classes = [], powerNames = [], int = 0, maxPV 
     goblinoide: [...names].some(n => n.startsWith(fold('Engenhocaria Goblinoide')))
   };
 }
+
+/** Engenhocas da ficha, em ordem alfabética. */
+export const actorEngenhocas = actor => [...(actor?.items ?? [])].filter(isEngenhoca).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));

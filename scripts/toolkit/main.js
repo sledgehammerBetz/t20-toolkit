@@ -1,26 +1,38 @@
 import { TOOLKIT_FEATURES } from './features.js';
 import { MODULE_ID, MODULE_VERSION } from '../constants.js';
-import { openGrimorio, readGrimorio } from './grimorio/grimorio-app.js';
-import { openEscriba } from './escriba/escriba-app.js';
-import { openUsurpador } from './usurpador/usurpador-app.js';
-import { openPlanner } from './planner/planner-app.js';
-import { openRegras, RegrasApp } from './regras/regras-app.js';
+import { readGrimorio } from './grimorio/grimorio-state.js';
+import { RegrasApp, openRegras } from './regras/regras-app.js';
 import { registerTableRulesSetting, getTableRules } from './core/table-rules.js';
 import { registerCastingGuardSetting, installCastingGuard } from './grimorio/casting-guard.js';
-import { openBuscador, casterContext } from './buscador/buscador-app.js';
-import { getSpellIndex, refreshCompendiumIndex } from './core/spell-index.js';
-import { getSpellCatalog } from './core/spells/spell-catalog.js';
+import { casterContext } from './core/caster-context.js';
 import { installToolkitSheetButton } from './sheet-button.js';
-import { openEngenhocas } from './engenhocas/engenhocas-app.js';
-import { activateEngenhoca, actorEngenhocas } from './engenhocas/engenhocas-actions.js';
+import { actorEngenhocas } from './engenhocas/engenhocas-rules.js';
 import { registerDirectUseSetting, installDirectUse } from './engenhocas/direct-use.js';
 import { migrateLegacyWorldSettings, LEGACY_MODULE_ID } from './core/settings-migration.js';
 
 import { renderToolkitHub } from './ui/hub-view.js';
-import { openHome } from './home/home-app.js';
 import { installErrorLog, registerBetaSettings, openReport, diagnostics, errorLog, betaWelcome } from './beta.js';
 import { paintTheme } from './ui/frame.js';
 import { registerToolkitThemeSetting, getToolkitTheme, setToolkitTheme, applyToolkitTheme } from './ui/theme-controller.js';
+
+/**
+ * As janelas só são carregadas quando alguém abre a ferramenta: quem entra no mundo baixa só o necessário
+ * para os botões, as configurações e os ganchos da ficha.
+ */
+const lazy = (path, name) => (...args) => import(path).then(m => m[name](...args));
+const openGrimorio = lazy('./grimorio/grimorio-app.js', 'openGrimorio');
+const openEscriba = lazy('./escriba/escriba-app.js', 'openEscriba');
+const openUsurpador = lazy('./usurpador/usurpador-app.js', 'openUsurpador');
+const openPlanner = lazy('./planner/planner-app.js', 'openPlanner');
+const openBuscador = lazy('./buscador/buscador-app.js', 'openBuscador');
+const openEngenhocas = lazy('./engenhocas/engenhocas-app.js', 'openEngenhocas');
+const activateEngenhoca = lazy('./engenhocas/engenhocas-actions.js', 'activateEngenhoca');
+const openHome = lazy('./home/home-app.js', 'openHome');
+const getSpellIndex = lazy('./core/spell-index.js', 'getSpellIndex');
+const reloadCompendiums = () => Promise.all([
+  import('./core/spells/spell-catalog.js').then(m => m.getSpellCatalog({ refresh: true })),
+  import('./core/spell-index.js').then(m => m.refreshCompendiumIndex())
+]);
 export { renderToolkitHub };
 
 function asRoot(element) {
@@ -120,7 +132,7 @@ if (globalThis.Hooks?.once) {
       grimorio:Object.freeze({open:openGrimorio,read:readGrimorio}),
       escriba:Object.freeze({open:openEscriba}),
       usurpador:Object.freeze({open:openUsurpador}),
-      buscador:Object.freeze({open:openBuscador,profiles:actor=>casterContext(actor),index:getSpellIndex,invalidate:()=>Promise.all([getSpellCatalog({refresh:true}),refreshCompendiumIndex()])}),
+      buscador:Object.freeze({open:openBuscador,profiles:actor=>casterContext(actor),index:getSpellIndex,invalidate:reloadCompendiums}),
       report:openReport,
       diagnostics:(o={})=>diagnostics(o),
       errors:errorLog,
