@@ -3,12 +3,15 @@
  * Lê o índice dos compêndios, avalia cada magia contra as classes da ficha
  * e adiciona a magia escolhida à ficha com seus aprimoramentos.
  */
+import { watchActor } from '../ui/live-refresh.js';
 import { enrichDescription } from '../ui/enrich.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { MODULE_ID } from '../../constants.js';
 import { SPELL_TYPES, SPELL_SCHOOLS, CIRCLES, fold, escapeHtml, actorClasses, arcanistPaths, actorSpells } from '../core/t20.js';
 import { buildCasterProfiles, evaluateSpell, learningCapacity, necromancerRatioOk, CASTER_CLASSES } from '../core/caster-rules.js';
 import { getSpellCatalog } from '../core/spells/spell-catalog.js';
+import { readSchools, casterContext } from '../core/caster-context.js';
+import { refreshCompendiumIndex } from '../core/spell-index.js';
 import { filterSpells, filterOptions, EMPTY_FILTERS } from '../core/spells/spell-filter.js';
 import { spellFilterPanel, bindSpellFilterPanel, viaTags } from '../ui/spell-filter-panel.js';
 import { toolFrame, onNavigate, switchTheme, reopen } from '../ui/frame.js';
@@ -23,17 +26,7 @@ function t20Label(map, key) {
 }
 const STATUS_LABEL = { allowed: 'Pode aprender', review: 'Conferir', blocked: 'Fora da regra', owned: 'Na ficha' };
 
-/** Escolas de Bardo/Druida ficam numa flag do módulo, por classe. */
-export function readSchools(actor) {
-  return actor?.getFlag?.(MODULE_ID, 'casting.schools') ?? {};
-}
-
-export function casterContext(actor) {
-  const classes = actorClasses(actor);
-  const profiles = buildCasterProfiles({ classes, arcanistPaths: arcanistPaths(actor), schoolsByClass: readSchools(actor) });
-  const known = actorSpells(actor);
-  return { classes, profiles, known, capacity: learningCapacity(profiles, known) };
-}
+export { readSchools, casterContext };
 
 export class BuscadorApp extends ApplicationV2 {
   static DEFAULT_OPTIONS = {
@@ -73,14 +66,16 @@ export class BuscadorApp extends ApplicationV2 {
     this.sfOptions ??= filterOptions(this.index.spells, this.index.packs);
     const ctx = this.actor ? casterContext(this.actor) : { classes: [], profiles: [], known: [], capacity: null };
     this.ctx = ctx;
+    this._rows = null;
     return ctx;
   }
 
   /** Status de cada magia do índice para o personagem atual. */
   rows() {
+    if (this._rows?.index === this.index) return this._rows.list;
     const ownedKeys = new Set(this.ctx.known.map(s => s.key));
     const ownedUuids = new Set(this.ctx.known.map(s => s.sourceUuid).filter(Boolean));
-    return this.index.spells.map(spell => {
+    const rows = this.index.spells.map(spell => {
       const owned = ownedUuids.has(spell.uuid) || ownedKeys.has(spell.key);
       const ev = this.actor ? evaluateSpell(spell, this.ctx.profiles) : { status: 'review', reasons: [] };
       if (this.actor && ev.status === 'allowed' && !necromancerRatioOk(this.ctx.capacity, spell)) {
@@ -89,19 +84,32 @@ export class BuscadorApp extends ApplicationV2 {
       }
       return { spell, owned, ...ev, status: owned ? 'owned' : ev.status };
     });
+    this._rows = { index: this.index, list: rows, byUuid: new Map(rows.map(r => [r.spell.uuid, r])) };
+    return rows;
   }
 
+  /** Linha de uma magia (sem percorrer a lista). */
+  row(uuid) {
+    this.rows();
+    return this._rows.byUuid.get(uuid);
+  }
+
+  /** Resultado dos filtros; o mesmo redesenho pede várias vezes (contagem, lista), então fica guardado até algo mudar. */
   filtered() {
     const st = this.filters;
     const rows = this.rows();
-    const byUuid = new Map(rows.map(r => [r.spell.uuid, r]));
+    const key = JSON.stringify({ ...st, selected: null, profileOpen: null, panel: null });
+    if (this._filtered?.rows === rows && this._filtered.key === key) return this._filtered.list;
+    const byUuid = this._rows.byUuid;
     const res = filterSpells(rows.map(r => r.spell), st);
     this.filterError = res.error || res.warning;
-    return res.results.map(({ spell, via }) => ({ ...byUuid.get(spell.uuid), via })).filter(({ status, owned }) => {
+    const list = res.results.map(({ spell, via }) => ({ ...byUuid.get(spell.uuid), via })).filter(({ status, owned }) => {
       if (st.hideOwned && owned) return false;
       if (st.onlyAllowed && this.actor && !['allowed', 'review', 'owned'].includes(status)) return false;
       return true;
     });
+    this._filtered = { rows, key, list };
+    return list;
   }
 
   /* ---------- render ---------- */
@@ -138,8 +146,7 @@ export class BuscadorApp extends ApplicationV2 {
   }
 
   _onFirstRender() {
-    const refresh = (item) => { if (this.actor && item?.parent === this.actor && this.rendered) this.render(); };
-    for (const hook of ['createItem', 'deleteItem', 'updateItem']) this._hooks.push([hook, Hooks.on(hook, refresh)]);
+    watchActor(this, { hooks: ['createItem', 'deleteItem', 'updateItem'] });
   }
 
   _onClose(options) {
@@ -205,7 +212,8 @@ export class BuscadorApp extends ApplicationV2 {
     const st = this.filters;
     const maxCircle = Math.max(0, ...(this.ctx?.profiles ?? []).map(p => p.maxCircle ?? 0));
     const extra = `${this.actor ? `<label class="t20tk-bz-check"><input type="checkbox" data-filter="onlyAllowed" ${st.onlyAllowed ? 'checked' : ''}> Só o que posso aprender</label>` : ''}
-      <label class="t20tk-bz-check"><input type="checkbox" data-filter="hideOwned" ${st.hideOwned ? 'checked' : ''}> Ocultar as que já tenho</label>`;
+      <label class="t20tk-bz-check"><input type="checkbox" data-filter="hideOwned" ${st.hideOwned ? 'checked' : ''}> Ocultar as que já tenho</label>
+      <button type="button" class="t20tk-ui-button" data-action="reload" title="Baixa os compêndios de novo do servidor (use se o mestre mudou algum compêndio)">Recarregar compêndios</button>`;
     return spellFilterPanel(st, this.sfOptions, { count: this.#countText(), maxCircle: this.actor && st.onlyAllowed ? maxCircle : 0, extra, packs: this.index.packs })
       + (this.filterError ? `<p class="t20tk-bz-warn t20tk-sf-error">${escapeHtml(this.filterError)}</p>` : '');
   }
@@ -251,7 +259,7 @@ export class BuscadorApp extends ApplicationV2 {
     const d = this.details.get(uuid);
     if (!d) return `<p class="t20tk-bz-empty">Carregando…</p>`;
     if (d.error) return `<p class="t20tk-bz-warn">${escapeHtml(d.error)}</p>`;
-    const row = this.rows().find(r => r.spell.uuid === uuid);
+    const row = this.row(uuid);
     const reasons = row?.reasons?.length ? `<ul class="t20tk-bz-reasons">${row.reasons.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>` : '';
     const s = d.system;
     const metric = (k, v) => `<div class="t20tk-metric"><span>${k}</span><strong>${escapeHtml(v || '—')}</strong></div>`;
@@ -311,7 +319,7 @@ export class BuscadorApp extends ApplicationV2 {
     const uuid = target.dataset.uuid;
     const actor = this.actor;
     if (!actor?.isOwner) return ui.notifications.warn('Você não tem permissão para alterar esta ficha.');
-    const row = this.rows().find(r => r.spell.uuid === uuid);
+    const row = this.row(uuid);
     if (!row || row.status === 'owned') return;
     const isGM = game.user.isGM;
     const warnings = [];
@@ -375,9 +383,11 @@ export class BuscadorApp extends ApplicationV2 {
     await switchTheme(target.dataset.themeValue);
   }
 
-  static async #onReload() {
-    this.index = await getSpellCatalog({ refresh: true });
+  static async #onReload(event, target) {
+    if (target) target.disabled = true;
+    [this.index] = await Promise.all([getSpellCatalog({ refresh: true }), refreshCompendiumIndex()]);
     this.sfOptions = filterOptions(this.index.spells, this.index.packs);
+    ui.notifications.info('Compêndios recarregados. Outras janelas do Toolkit já abertas veem a mudança quando forem reabertas.');
     this.render();
   }
 

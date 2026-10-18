@@ -4,6 +4,7 @@
  * que leva direto à solução, e as ferramentas que fazem sentido para ele. Sem personagem: escolha um dos seus.
  * Só lê a ficha; nada aqui altera dados.
  */
+import { watchActor } from '../ui/live-refresh.js';
 import { MODULE_ID, MODULE_VERSION } from '../../constants.js';
 import { openReport } from '../beta.js';
 import { escapeHtml, fold, actorClasses, actorSpells, arcanistPaths } from '../core/t20.js';
@@ -202,8 +203,7 @@ export class HomeApp extends ApplicationV2 {
   _replaceHTML(result, content) { replaceKeepingPlace(content, result); }
 
   _onFirstRender() {
-    const refresh = (doc) => { const a = doc?.parent ?? doc; if (this.actor && a === this.actor && this.rendered) this.render(); };
-    for (const hook of ['createItem', 'deleteItem', 'updateItem', 'updateActor']) this._hooks.push([hook, Hooks.on(hook, refresh)]);
+    watchActor(this);
   }
 
   _onClose(options) {

@@ -4,7 +4,6 @@
  */
 import { MODULE_ID } from '../../constants.js';
 import { isEngenhoca } from './engenhocas-rules.js';
-import { activateEngenhoca } from './engenhocas-actions.js';
 
 const TARGET = 'CONFIG.Item.documentClass.prototype.roll';
 let installed = false;
@@ -25,7 +24,11 @@ export function installDirectUse() {
   const handle = async item => {
     if (busy.has(item.uuid)) return null;
     busy.add(item.uuid);
-    try { return await activateEngenhoca(item); }
+    try {
+      // A ativação só é carregada quando alguém usa uma engenhoca.
+      const { activateEngenhoca } = await import('./engenhocas-actions.js');
+      return await activateEngenhoca(item);
+    }
     catch (error) {
       console.error('[T20 Toolkit] Erro ao ativar engenhoca:', error);
       ui.notifications.error(`Erro ao ativar "${item.name}". Veja o console (F12).`);

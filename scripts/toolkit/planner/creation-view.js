@@ -14,6 +14,7 @@
  * As regras opcionais vêm de getTableRules() (janela Regras da mesa).
  */
 import { MODULE_ID } from '../../constants.js';
+import { planFlag, draftUpdate } from './plan-draft.js';
 import { postCard, chatFlavor } from '../ui/chat.js';
 import { escapeHtml, fold } from '../core/t20.js';
 import { ATTRS, ATTR_LABELS, POINT_COST, stepPoint, validatePoints, parseClassSkills, skillKeyFor, intBonusSkills } from './creation-rules.js';
@@ -42,7 +43,7 @@ export function skillLabels() {
 }
 
 export function readCreation(actor) {
-  const cr = actor?.getFlag?.(MODULE_ID, 'plan')?.creation ?? {};
+  const cr = planFlag(actor).creation ?? {};
   if (!cr.skillPicks && (cr.classSkills?.length || cr.intSkills?.length)) {
     // formato antigo: nomes das perícias da classe + chaves de Inteligência
     const labels = skillLabels();
@@ -179,7 +180,7 @@ export function otherAttributes(idx, cr, rules = getTableRules(), info = raceInf
   }
   for (const u of fxUuids(idx, cr, rules, info)) {
     const fx = FX.get(u);
-    if (fx && Object.keys(fx).length) parts.push({ label: idx.powers.find(p => p.uuid === u)?.name ?? 'Poder', attrs: fx, how: 'efeito' });
+    if (fx && Object.keys(fx).length) parts.push({ label: idx.powerByUuid.get(u)?.name ?? 'Poder', attrs: fx, how: 'efeito' });
   }
   const total = addAttrs(...parts.map(p => p.attrs));
   const toBase = addAttrs(...parts.filter(p => p.how === 'base').map(p => p.attrs));
@@ -374,7 +375,7 @@ export function renderAge(cr, rules, idx, age) {
   if (age.features?.length) html += `<ul class="t20tk-pl-gains">${age.features.map(f => `<li data-kind="note">${escapeHtml(f)}</li>`).join('')}</ul>`;
   if (rule === 'herois' && band === 'adulto') {
     html += `<label class="t20tk-cr-check"><input type="checkbox" name="adultPower" ${cr.adultPower ? 'checked' : ''}> Já Vi Coisas: receber um poder geral (e uma complicação de idade)</label>`;
-    if (cr.adultPower) html += `<div class="t20tk-wz-row"><span>Poder geral</span>${pickButton({ path: 'agePower', pool: 'geral', title: 'Poder geral (Já Vi Coisas)', item: idx.powers.find(p => p.uuid === cr.agePower) })}</div>`;
+    if (cr.adultPower) html += `<div class="t20tk-wz-row"><span>Poder geral</span>${pickButton({ path: 'agePower', pool: 'geral', title: 'Poder geral (Já Vi Coisas)', item: idx.powerByUuid.get(cr.agePower) })}</div>`;
   }
   if (age.complications) {
     const chosen = (cr.ageComps ?? []).filter(Boolean).slice(0, age.complications);
@@ -519,10 +520,10 @@ export function creationProblems(app, cr) {
 }
 
 /** Botões ▲▼ da compra de pontos. */
-export async function stepCreationAttribute(actor, attr, delta) {
+export async function stepCreationAttribute(app, attr, delta) {
   if (!ATTRS.includes(attr)) return;
-  const cur = readCreation(actor).base?.[attr] ?? 0;
-  await actor.update({ [`${FLAG}.base.${attr}`]: stepPoint(cur, Number(delta)) });
+  const cur = readCreation(app.actor).base?.[attr] ?? 0;
+  await draftUpdate(app, { [`${FLAG}.base.${attr}`]: stepPoint(cur, Number(delta)) });
 }
 
 /** Rola os atributos pelo método escolhido (4d6, 3d6, épica ou Nimb) e mostra no chat. */
@@ -582,18 +583,24 @@ export async function applyCreation(app) {
     tp: Number(actor.system?.dinheiro?.tp) || 0
   };
   const created = [];
-  const createData = async (data) => {
+  // Os itens são juntados numa fila e criados de uma vez (uma ida ao servidor em vez de uma por item).
+  // A raça é a exceção: vai antes, sozinha, porque o sistema pode perguntar atributos ao criá-la.
+  const queue = [];
+  const abilitySlots = new Set();   // habilidades de classe: não entram se a ficha ou a fila já tiverem uma com o mesmo nome
+  const queueData = (data) => {
     foundry.utils.setProperty(data, `flags.${MODULE_ID}.plannerLevel`, 1);
-    const [item] = await actor.createEmbeddedDocuments('Item', [data]);
-    if (item) created.push(item.id);
-    return item;
+    queue.push(Promise.resolve(data));
+    return queue.length - 1;
   };
-  const createFrom = async (uuid, extra = {}) => {
-    const doc = await fromUuid(uuid);
-    if (!doc) return null;
-    const data = game.items.fromCompendium(doc);
-    foundry.utils.mergeObject(data, extra);
-    return createData(data);
+  const queueFrom = (uuid, extra = {}) => {
+    queue.push(fromUuid(uuid).then(doc => {
+      if (!doc) return null;
+      const data = game.items.fromCompendium(doc);
+      foundry.utils.mergeObject(data, extra);
+      foundry.utils.setProperty(data, `flags.${MODULE_ID}.plannerLevel`, 1);
+      return data;
+    }));
+    return queue.length - 1;
   };
   try {
     const age = ageFor(cr, rules);
@@ -601,45 +608,54 @@ export async function applyCreation(app) {
     const info = raceInfo(idx, cr);
     const other = otherAttributes(idx, cr, rules, info);
     const base = addAttrs(baseAttributes(cr, rules), other.toBase);
-    await actor.update(Object.fromEntries(ATTRS.map(a => [`system.atributos.${a}.base`, base[a] ?? 0])));
+    const update = Object.fromEntries(ATTRS.map(a => [`system.atributos.${a}.base`, base[a] ?? 0]));
     // 2) Raça (substitui uma raça anterior, como a ficha faz). O Toolkit grava os modificadores finais
     //    (fixos + à escolha + "+1" de habilidades) e zera os "atributos dinâmicos" para o sistema não perguntar de novo.
     const race = info.race;
     const raceNotes = [];
     if (cr.race) {
-      for (const old of actor.items.filter(i => i.type === 'race')) await old.delete();
+      const oldRaces = actor.items.filter(i => i.type === 'race').map(i => i.id);
       const custom = race && (rules.openRaces || Object.keys(info.attrBonus).length || race.dynamic?.length);
-      await createFrom(cr.race, custom ? { system: { atributos: racialAttributes(race, cr, rules, info.attrBonus), atributosDinamicos: { value: [] } } } : {});
+      const [raceDoc] = await Promise.all([fromUuid(cr.race), oldRaces.length ? actor.deleteEmbeddedDocuments('Item', oldRaces) : null]);
+      if (raceDoc) {
+        const data = game.items.fromCompendium(raceDoc);
+        foundry.utils.mergeObject(data, custom ? { system: { atributos: racialAttributes(race, cr, rules, info.attrBonus), atributosDinamicos: { value: [] } } } : {});
+        foundry.utils.setProperty(data, `flags.${MODULE_ID}.plannerLevel`, 1);
+        const [item] = await actor.createEmbeddedDocuments('Item', [data]);
+        if (item) created.push(item.id);
+      }
       if (race) {
         // Garante o modificador racial final na ficha (mesmo que o sistema tenha perguntado algo ao criar a raça).
         const fin = racialAttributes(race, cr, rules, info.attrBonus);
-        await actor.update(Object.fromEntries(ATTRS.map(a => [`system.atributos.${a}.racial`, fin[a] ?? 0])));
+        for (const a of ATTRS) update[`system.atributos.${a}.racial`] = fin[a] ?? 0;
       }
       // 2b) Escolhas dentro da raça: bancos (material, presentes…), poderes, magias e anotações
-      for (const pool of info.pools) for (const u of cr.racePool?.[pool.id] ?? []) await createFrom(u);
+      for (const pool of info.pools) for (const u of cr.racePool?.[pool.id] ?? []) queueFrom(u);
       const labelsR = skillLabels();
+      const spellNotes = [];
       for (const c of info.choices) for (const [i, slot] of c.slots.entries()) {
         const pick = cr.raceChoices?.[c.key]?.[i] ?? {};
         if (!pick.value) continue;
         const isPower = slot.kind === 'power' || ((slot.kind === 'skillOrPower' || slot.kind === 'bonusOrPower') && pick.mode === 'power');
-        if (isPower) await createFrom(pick.value);
-        else if (slot.kind === 'spell' && slot.asNote) raceNotes.push(`${c.name}: ${(await fromUuid(pick.value))?.name ?? pick.value}`);
-        else if (slot.kind === 'spell') await createFrom(pick.value, { flags: { [MODULE_ID]: { learnedBy: 'raca' } } });
+        if (isPower) queueFrom(pick.value);
+        else if (slot.kind === 'spell' && slot.asNote) spellNotes.push(fromUuid(pick.value).then(d => `${c.name}: ${d?.name ?? pick.value}`, () => `${c.name}: ${pick.value}`));
+        else if (slot.kind === 'spell') queueFrom(pick.value, { flags: { [MODULE_ID]: { learnedBy: 'raca' } } });
         else if (slot.kind === 'note' || slot.kind === 'bonusOrPower') raceNotes.push(`${c.name}: ${slot.label ?? '+2 em'} ${labelsR[pick.value] ?? pick.value}`);
       }
+      raceNotes.push(...await Promise.all(spellNotes));
     }
     // 3) Classe + habilidades de 1º nível + caminho
     const cls = idx.classes.find(c => c.uuid === cr.cls);
-    let classItem = null;
+    let classSlot = null;
     if (cls) {
-      classItem = await createFrom(cls.uuid, { system: { niveis: 1, inicial: true } });
+      classSlot = queueFrom(cls.uuid, { system: { niveis: 1, inicial: true } });
       for (const gain of gainsAt(cls.name, 1).gains) {
         if (gain.kind === 'ability') {
           const ref = app.findAbility?.(cls.name, gain.item) ?? idx.powers.find(p => p.tipo === 'ability' && p.key === fold(gain.item));
-          if (ref && !actor.items.some(i => fold(i.name) === ref.key)) await createFrom(ref.uuid);
+          if (ref && !actor.items.some(i => fold(i.name) === ref.key)) abilitySlots.add(queueFrom(ref.uuid));
         }
       }
-      if (cr.path) await createFrom(cr.path);
+      if (cr.path) queueFrom(cr.path);
     }
     // 4) Perícias: classe (fixas, "ou", escolhidas), origem, raça e Inteligência — da grade única
     const sk = creationSkills(idx, cr, rules, info);
@@ -653,52 +669,72 @@ export async function applyCreation(app) {
       origins.push({ origin, S });
       if (origin.fixed) {
         const power = idx.powers.find(x => x.tipo === 'origem' && x.key === fold(origin.fixed.power));
-        if (power) await createFrom(power.uuid);
+        if (power) queueFrom(power.uuid);
         continue;
       }
       for (const pick of S.picks) {
         const [kind, value] = [pick.slice(0, pick.indexOf(':')), pick.slice(pick.indexOf(':') + 1)];
-        if (kind === 'power') await createFrom(value);
-        else if (kind === 'generic' && S.choice) await createFrom(S.choice);
+        if (kind === 'power') queueFrom(value);
+        else if (kind === 'generic' && S.choice) queueFrom(S.choice);
       }
     }
-    const skillUpdate = Object.fromEntries([...trained].map(k => [`system.pericias.${k}.treinado`, true]));
+    for (const k of trained) update[`system.pericias.${k}.treinado`] = true;
     let n = 1;
     for (const label of customs) {
       while (actor.system?.pericias?.[`ofi${n}`]) n++;
-      skillUpdate[`system.pericias.ofi${n}`] = { label, custom: true, atributo: 'int', st: true, treinado: true };
+      update[`system.pericias.ofi${n}`] = { label, custom: true, atributo: 'int', st: true, treinado: true };
       n++;
     }
     // 5) Origem, divindade e atributo-chave de magia
     const dvc = devotionContext(app, cr);
     const god = cr.god && devotionCheck({ god: cr.god, race: dvc.race, classes: dvc.classes, rules }).level !== 'block' ? cr.god : '';
-    if (origins.length) skillUpdate['system.detalhes.origem'] = origins.map(o => o.origin.name).join(' / ');
-    if (god) skillUpdate['system.detalhes.divindade'] = god;
-    const pathName = idx.powers.find(p => p.uuid === cr.path)?.name ?? '';
+    if (origins.length) update['system.detalhes.origem'] = origins.map(o => o.origin.name).join(' / ');
+    if (god) update['system.detalhes.divindade'] = god;
+    const pathName = idx.powerByUuid.get(cr.path)?.name ?? '';
     const pathKey = PATH_KEY[fold(pathName).split(':').pop()?.trim()];
     const key = pathKey ?? KEY_BY_CLASS[cls?.key];
-    if (key) skillUpdate['system.attributes.conjuracao'] = key;
-    await actor.update(skillUpdate);
-    if (god && cr.godPower) await createFrom(cr.godPower);
+    if (key) update['system.attributes.conjuracao'] = key;
+    if (god && cr.godPower) queueFrom(cr.godPower);
     // 6) Complicação (+ poder geral) e idade (complicações de idade, poder de "Já Vi Coisas")
     if (rules.complications && cr.complication) {
-      await createFrom(cr.complication);
-      if (cr.complicationPower) await createFrom(cr.complicationPower);
+      queueFrom(cr.complication);
+      if (cr.complicationPower) queueFrom(cr.complicationPower);
     }
     for (const name of (cr.ageComps ?? []).slice(0, age.complications).filter(Boolean)) {
       const data = ageComplicationItem(name);
-      if (data) await createData(data);
+      if (data) queueData(data);
     }
-    if (age.extraPower && cr.agePower) await createFrom(cr.agePower);
-    // 7) Itens de origem
+    if (age.extraPower && cr.agePower) queueFrom(cr.agePower);
+    // 7) Itens de origem (o dinheiro rolado entra no mesmo update do fim)
     const notes = [];
-    for (const { origin, S } of origins) notes.push(...await createOriginItems(actor, idx, origin.name, S, createFrom));
-    // 8) Histórico para desfazer
-    await actor.update({
+    let money = 0;
+    for (const { origin, S } of origins) {
+      const r = await queueOriginItems(actor, idx, origin.name, S, queueFrom);
+      notes.push(...r.notes);
+      money += r.money;
+    }
+    if (money) update['system.dinheiro.tp'] = (Number(actor.system?.dinheiro?.tp) || 0) + money;
+    // Cria tudo de uma vez, na ordem em que entrou na fila.
+    const datas = await Promise.all(queue);
+    const names = new Set();
+    const slots = [];
+    datas.forEach((d, i) => {
+      if (!d) return;
+      const name = fold(d.name);
+      if (abilitySlots.has(i) && names.has(name)) return;
+      names.add(name);
+      slots.push(i);
+    });
+    const docs = slots.length ? await actor.createEmbeddedDocuments('Item', slots.map(i => datas[i])) : [];
+    created.push(...docs.map(d => d.id));
+    const classItem = classSlot === null ? null : docs[slots.indexOf(classSlot)] ?? null;
+    // 8) Atributos, perícias, origem, divindade e histórico para desfazer: uma gravação só
+    Object.assign(update, {
       [`flags.${MODULE_ID}.history.1`]: { cls: cls?.name ?? '', classId: classItem?.id ?? null, classCreated: true, created, creation: true, prev, trained: [...trained] },
       [`flags.${MODULE_ID}.creationRules`]: { ageRule: ageRuleFor(cr.ageRule, rules), age: ageRuleFor(cr.ageRule, rules) !== 'off' ? (cr.age || 'jovem') : null, noPhysicalIncrease: !!age.noPhysicalIncrease, extraLevels: age.levels || 0 },
       [`flags.${MODULE_ID}.plan.-=creation`]: null
     });
+    await actor.update(update);
     const raceName = race?.name ?? '';
     await postCard(actor, {
       tool: 'planner', tone: 'success', title: 'Personagem criado', subtitle: `${actor.name} · ${raceName} ${cls?.name ?? ''}`.trim(),
@@ -713,30 +749,30 @@ export async function applyCreation(app) {
   }
 }
 
-/** Cria os itens de uma origem; rola o dinheiro. Devolve os textos que não viram item. */
-async function createOriginItems(actor, idx, originName, S, createFrom) {
+/** Põe na fila os itens de uma origem e rola o dinheiro. Devolve os textos que não viram item e o dinheiro rolado. */
+async function queueOriginItems(actor, idx, originName, S, queueFrom) {
   const gear = idx.gear ?? [];
   const notes = [];
+  let money = 0;
   const list = ORIGIN_ITEMS[originName] ?? [];
   for (const [i, e] of list.entries()) {
     if (e.note) { notes.push(e.note); continue; }
     if (e.money) {
       const roll = await new Roll(e.money).evaluate();
       await roll.toMessage?.({ speaker: ChatMessage.getSpeaker({ actor }), flavor: chatFlavor({ tool: 'planner', title: `Origem ${originName}`, result: e.label ?? `T$ ${e.money}` }) });
-      await actor.update({ 'system.dinheiro.tp': (Number(actor.system?.dinheiro?.tp) || 0) + roll.total });
+      money += roll.total;
       continue;
     }
     const uuid = (e.choose || e.weapon) ? S.items?.[`i${i}`] : findGear(gear, e.item)?.uuid;
     if (!uuid) { notes.push(e.label ?? e.item ?? ''); continue; }
-    await createFrom(uuid, e.qty ? { system: { qtd: e.qty } } : {});
+    queueFrom(uuid, e.qty ? { system: { qtd: e.qty } } : {});
   }
-  return notes.filter(Boolean);
+  return { notes: notes.filter(Boolean), money };
 }
 
 /** Desfaz a criação: remove itens criados (raça, classe, poderes) e volta atributos e perícias. */
-export async function undoCreation(actor, h) {
+export async function undoCreation(actor, h, extra = {}) {
   const ids = (h.created ?? []).filter(id => actor.items.get(id));
-  if (ids.length) await actor.deleteEmbeddedDocuments('Item', ids);
   const upd = Object.fromEntries(ATTRS.map(a => [`system.atributos.${a}.base`, h.prev?.base?.[a] ?? 0]));
   for (const k of h.trained ?? []) if (!(h.prev?.trained ?? []).includes(k)) upd[`system.pericias.${k}.treinado`] = false;
   upd['system.detalhes.origem'] = h.prev?.origem ?? '';
@@ -744,5 +780,5 @@ export async function undoCreation(actor, h) {
   upd['system.attributes.conjuracao'] = h.prev?.conjuracao ?? '';
   if (h.prev?.tp !== undefined) upd['system.dinheiro.tp'] = h.prev.tp;
   upd[`flags.${MODULE_ID}.-=creationRules`] = null;
-  await actor.update(upd);
+  await Promise.all([ids.length ? actor.deleteEmbeddedDocuments('Item', ids) : null, actor.update({ ...upd, ...extra })]);
 }

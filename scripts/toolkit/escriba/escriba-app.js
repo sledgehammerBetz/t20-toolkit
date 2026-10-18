@@ -3,6 +3,7 @@
  * Cria a magia na ficha com flags['t20-toolkit'].learnedBy = 'escriba', que o Buscador não conta no limite do nível.
  * Pergaminhos do sistema: item `consumivel` com system.tipo 'scroll' e flags.core.sourceId apontando para a magia.
  */
+import { watchActor, COMBAT_PATHS } from '../ui/live-refresh.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { MODULE_ID } from '../../constants.js';
 import { SPELL_SCHOOLS, SPELL_TYPES, escapeHtml, fold, actorClasses, arcanistPaths, actorSpells, hasPower, trainedSkillMatching } from '../core/t20.js';
@@ -46,8 +47,7 @@ export class EscribaApp extends ApplicationV2 {
   get title() { return this.actor ? `Escriba Arcano — ${this.actor.name}` : 'Escriba Arcano'; }
 
   async _prepareContext() {
-    this.index ??= await getSpellIndex();
-    this.catalog ??= await getSpellCatalog();
+    if (!this.index || !this.catalog) [this.index, this.catalog] = await Promise.all([getSpellIndex(), getSpellCatalog()]);
     this.sfOptions ??= filterOptions(this.catalog.spells.filter(s => ['arc', 'uni'].includes(s.type)), this.catalog.packs);
     const actor = this.actor;
     const classes = actorClasses(actor);
@@ -159,8 +159,7 @@ export class EscribaApp extends ApplicationV2 {
   }
 
   _onFirstRender() {
-    const refresh = (doc) => { const a = doc?.parent ?? doc; if (a === this.actor && this.rendered) this.render(); };
-    for (const hook of ['createItem', 'deleteItem', 'updateItem', 'updateActor']) this._hooks.push([hook, Hooks.on(hook, refresh)]);
+    watchActor(this, { ignore: COMBAT_PATHS });
   }
 
   _onClose(options) {
@@ -207,8 +206,7 @@ export class EscribaApp extends ApplicationV2 {
       const data = game.items.fromCompendium(doc);
       foundry.utils.setProperty(data, `flags.${MODULE_ID}.learnedBy`, 'escriba');
       foundry.utils.setProperty(data, `flags.${MODULE_ID}.learnedFrom`, target.dataset.scroll ? 'pergaminho' : 'grimorio');
-      await actor.createEmbeddedDocuments('Item', [data]);
-      if (choice.pay && enough) await actor.update({ 'system.dinheiro.tp': c.gold - cost.tibares });
+      await Promise.all([actor.createEmbeddedDocuments('Item', [data]), choice.pay && enough ? actor.update({ 'system.dinheiro.tp': c.gold - cost.tibares }) : null]);
       if (choice.advance && gm) await game.time.advance(cost.days * 86400);
       await postCard(actor, {
         tool: 'escriba', tone: 'success', title: `${spell.name} copiada`, subtitle: `${actor.name} · ${target.dataset.scroll ? 'de um pergaminho' : 'de um grimório'}`,

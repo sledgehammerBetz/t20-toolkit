@@ -14,7 +14,7 @@ import { skillSubstitutes, textBonuses, testParts, fixedBonus, allFixed, testFor
 import {
   FLAG_SCOPE, FLAG_KEY, SKILL_KEY, APARATO_BY_ID, ENGENHOCA_ITEM_TYPE, COUPLE_PRICE, isEngenhoca, engenhocaState, engenhocaFlags, inventorContext,
   activationDC, activationExtras, activationCost, resistanceBonus, outcomePatch, NEW_DAY_PATCH, aparatoBlocker, buildEngenhocaItem, craftCheck,
-  splitApplied, powerEffectKey, armorUpgradeCount, armorCapacity, coupleBlocker
+  splitApplied, powerEffectKey, armorUpgradeCount, armorCapacity, coupleBlocker, actorEngenhocas
 } from './engenhocas-rules.js';
 
 const DialogV2 = () => foundry.applications.api.DialogV2;
@@ -34,17 +34,20 @@ export function actorInventor(actor) {
   });
 }
 
-export const actorEngenhocas = actor => [...(actor?.items ?? [])].filter(isEngenhoca).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+export { actorEngenhocas };
 
 const money = actor => Number(actor?.system?.dinheiro?.tp) || 0;
 const pmNow = actor => (Number(actor?.system?.attributes?.pm?.value) || 0) + (Number(actor?.system?.attributes?.pm?.temp) || 0);
 
 /** Atualiza campos da flag da engenhoca. `unset` remove chaves (ex.: 'aparatoGroups.comutador'). */
-async function patchFlags(item, patch, unset = []) {
+function flagsUpdate(patch, unset = []) {
   const base = `flags.${FLAG_SCOPE}.${FLAG_KEY}`;
   const upd = Object.fromEntries(Object.entries(patch).map(([k, v]) => [`${base}.${k}`, v]));
   for (const path of unset) upd[`${base}.${path.replace(/([^.]+)$/, '-=$1')}`] = null;
-  return item.update(upd);
+  return upd;
+}
+async function patchFlags(item, patch, unset = []) {
+  return item.update(flagsUpdate(patch, unset));
 }
 
 /* ---------- fabricar ---------- */
@@ -78,8 +81,8 @@ export async function craftEngenhoca(actor, { uuid, name = '', mode = 'hand', ro
   }
 
   const data = buildEngenhocaItem({ spell: { name: spell.name, img: spell.img, uuid: spell.uuid, system: spell.toObject().system, effects: spell.toObject().effects, flags: spell.toObject().flags }, name: finalName, mode, makerMaxPV: inv.maxPV, manutencao: inv.manutencao, inventorLevel: inv.level, price: check.price, userId: game.user.id });
-  const [created] = await actor.createEmbeddedDocuments('Item', [data]);
-  if (pay && check.price) await actor.update({ 'system.dinheiro.tp': money(actor) - check.price });
+  const tp = money(actor) - check.price;
+  const [[created]] = await Promise.all([actor.createEmbeddedDocuments('Item', [data]), pay && check.price ? actor.update({ 'system.dinheiro.tp': tp }) : null]);
   await postCard(actor, {
     tool: 'engenhocas', tone: 'success', title: 'Engenhoca fabricada', subtitle: `${actor.name} · ${spell.name}`,
     rows: [['Forma', mode === 'body' ? 'Vestida' : 'Empunhada'], ['Preço', pay ? `T$ ${check.price}` : 'não descontado'], ['CD de ativação', String(15 + check.pm)]],
@@ -278,7 +281,8 @@ async function confirmActivation(actor, item, st, inv, sys) {
       box?.addEventListener('change', ev => { read(ev.target); box.innerHTML = body(); });
     }
   });
-  if (result && actor.isOwner) await actor.setFlag(MODULE_ID, TEST_FLAG, { skill: c.skill, fx: c.fx, text: c.text }).catch(() => null);
+  const remember = { skill: c.skill, fx: c.fx, text: c.text };
+  if (result && actor.isOwner && !foundry.utils.objectsEqual(saved, remember)) await actor.setFlag(MODULE_ID, TEST_FLAG, remember).catch(() => null);
   return result;
 }
 
@@ -419,11 +423,13 @@ export async function coupleEngenhoca(actor, item, target, { pay = true } = {}) 
   const why = coupleBlocker(st, target === 'automato' ? { kind: 'automato', used: automatoUsed(actor) } : { kind: 'armor', tipo: armor.tipo, used: armor.used }, inv);
   if (why && !game.user.isGM) return ui.notifications.warn(why);
   if (pay && money(actor) < COUPLE_PRICE) return ui.notifications.warn(`Faltam T$ ${COUPLE_PRICE - money(actor)} (custa T$ ${COUPLE_PRICE}).`);
-  await item.update({
-    'system.equipado': false, 'system.equipado2.slot': 0,
-    [`flags.${FLAG_SCOPE}.${FLAG_KEY}.coupled`]: target === 'automato' ? { kind: 'automato', id: null } : { kind: 'armor', id: armor.item.id }
-  });
-  if (pay) await actor.update({ 'system.dinheiro.tp': money(actor) - COUPLE_PRICE });
+  await Promise.all([
+    item.update({
+      'system.equipado': false, 'system.equipado2.slot': 0,
+      [`flags.${FLAG_SCOPE}.${FLAG_KEY}.coupled`]: target === 'automato' ? { kind: 'automato', id: null } : { kind: 'armor', id: armor.item.id }
+    }),
+    pay ? actor.update({ 'system.dinheiro.tp': money(actor) - COUPLE_PRICE }) : null
+  ]);
   const where = armor ? armor.item.name : 'autômato';
   await postCard(actor, {
     tool: 'engenhocas', tone: 'success', title: 'Engenhoca acoplada', subtitle: `${item.name} → ${where}`,
@@ -463,12 +469,14 @@ export async function repairEngenhoca(item) {
 }
 
 export async function newDay(actor) {
-  for (const item of actorEngenhocas(actor)) await patchFlags(item, NEW_DAY_PATCH);
+  const updates = actorEngenhocas(actor).map(item => ({ _id: item.id, ...flagsUpdate(NEW_DAY_PATCH) }));
+  if (updates.length) await actor.updateEmbeddedDocuments('Item', updates);
   await postCard(actor, { tool: 'engenhocas', title: 'Novo dia', subtitle: actor.name, note: 'As CDs de ativação voltaram ao normal. Engenhocas enguiçadas continuam enguiçadas até o conserto.' });
 }
 
 export async function newScene(actor) {
-  for (const item of actorEngenhocas(actor)) await patchFlags(item, { supressorScene: null });
+  const updates = actorEngenhocas(actor).map(item => ({ _id: item.id, ...flagsUpdate({ supressorScene: null }) }));
+  if (updates.length) await actor.updateEmbeddedDocuments('Item', updates);
   ui.notifications.info('Nova cena: Supressores de Segurança liberados.');
 }
 
@@ -491,11 +499,11 @@ export async function installAparato(actor, type, targets, { pay = true } = {}) 
   }
   if (pay && money(actor) < def.price) return ui.notifications.warn(`Faltam T$ ${def.price - money(actor)} (custa T$ ${def.price}).`);
   const group = def.targets > 1 ? foundry.utils.randomID() : null;
-  for (const t of targets) {
+  const updates = targets.map(t => {
     const st = engenhocaState(t);
-    await patchFlags(t, { aparatos: [...st.aparatos, type], ...(group ? { aparatoGroups: { ...st.groups, [type]: group } } : {}) });
-  }
-  if (pay && def.price) await actor.update({ 'system.dinheiro.tp': money(actor) - def.price });
+    return { _id: t.id, ...flagsUpdate({ aparatos: [...st.aparatos, type], ...(group ? { aparatoGroups: { ...st.groups, [type]: group } } : {}) }) };
+  });
+  await Promise.all([actor.updateEmbeddedDocuments('Item', updates), pay && def.price ? actor.update({ 'system.dinheiro.tp': money(actor) - def.price }) : null]);
   await postCard(actor, { tool: 'engenhocas', tone: 'success', title: `${def.label} instalado`, subtitle: actor.name, rows: [['Preço', pay ? `T$ ${def.price}` : 'não descontado']], items: targets.map(t => ({ name: t.name, img: t.img })), note: def.text });
 }
 
@@ -503,11 +511,12 @@ export async function removeAparato(actor, item, type) {
   const st = engenhocaState(item);
   const group = st.groups?.[type];
   const linked = group ? actorEngenhocas(actor).filter(e => engenhocaState(e).groups?.[type] === group) : [item];
-  for (const t of linked) {
+  const updates = linked.map(t => {
     const s = engenhocaState(t);
     const i = s.aparatos.indexOf(type);
-    await patchFlags(t, { aparatos: s.aparatos.filter((_, k) => k !== i) }, s.groups?.[type] ? [`aparatoGroups.${type}`] : []);
-  }
+    return { _id: t.id, ...flagsUpdate({ aparatos: s.aparatos.filter((_, k) => k !== i) }, s.groups?.[type] ? [`aparatoGroups.${type}`] : []) };
+  });
+  if (updates.length) await actor.updateEmbeddedDocuments('Item', updates);
 }
 
 export { isEngenhoca, engenhocaState, chatCard };

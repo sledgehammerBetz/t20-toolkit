@@ -4,6 +4,7 @@
  * que fazem a ficha do Tormenta20 mostrar o sol de "preparada" em cada magia.
  * Estado próprio: flags['t20-toolkit'].grimorio = { lastStudyDay, lastStudyTime, memorized[] }.
  */
+import { watchActor, COMBAT_PATHS } from '../ui/live-refresh.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { getSpellCatalog, classifySpell } from '../core/spells/spell-catalog.js';
 import { filterSpells, filterOptions, EMPTY_FILTERS } from '../core/spells/spell-filter.js';
@@ -13,6 +14,7 @@ import { postCard } from '../ui/chat.js';
 import { SPELL_SCHOOLS, escapeHtml, actorSpells, arcanistPaths, actorClasses } from '../core/t20.js';
 import { magoSpells, memorizationLimit, dayKey, validateStudy } from './grimorio-rules.js';
 import { toolFrame, onNavigate, switchTheme, reopen } from '../ui/frame.js';
+import { readGrimorio, isMago } from './grimorio-state.js';
 
 const ApplicationV2 = globalThis.foundry?.applications?.api?.ApplicationV2 ?? class {};
 
@@ -20,13 +22,7 @@ export function today() {
   return dayKey(game.time?.components, game.time?.worldTime);
 }
 
-export function readGrimorio(actor) {
-  return actor?.getFlag?.(MODULE_ID, 'grimorio') ?? {};
-}
-
-export function isMago(actor) {
-  return arcanistPaths(actor).includes('mago');
-}
+export { readGrimorio, isMago };
 
 export class GrimorioApp extends ApplicationV2 {
   static DEFAULT_OPTIONS = {
@@ -163,11 +159,7 @@ export class GrimorioApp extends ApplicationV2 {
   }
 
   _onFirstRender() {
-    const refresh = (doc) => {
-      const actor = doc?.parent ?? doc;
-      if (this.actor && actor === this.actor && this.rendered) this.render();
-    };
-    for (const hook of ['createItem', 'deleteItem', 'updateItem', 'updateActor']) this._hooks.push([hook, Hooks.on(hook, refresh)]);
+    watchActor(this, { ignore: COMBAT_PATHS });
   }
 
   _onClose(options) {
@@ -204,12 +196,11 @@ export class GrimorioApp extends ApplicationV2 {
       .filter(s => s.prepared !== chosen.has(s.id))
       .map(s => ({ _id: s.id, 'system.preparada': chosen.has(s.id) }));
     try {
-      if (updates.length) await actor.updateEmbeddedDocuments('Item', updates);
       const flagUpdate = {
         [`flags.${MODULE_ID}.grimorio`]: { lastStudyDay: c.day, lastStudyTime: game.time.worldTime, memorized: selectedIds }
       };
       if (!actor.getFlag('tormenta20', 'mago')) flagUpdate['flags.tormenta20.mago'] = true; // liga o sol de "preparada" na ficha
-      await actor.update(flagUpdate);
+      await Promise.all([updates.length ? actor.updateEmbeddedDocuments('Item', updates) : null, actor.update(flagUpdate)]);
       this.pending = null;
       const advance = this.element.querySelector('input[name="advanceTime"]')?.checked;
       if (advance && game.user.isGM) await game.time.advance(3600);

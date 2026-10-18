@@ -4,6 +4,7 @@
  * (grupo, categoria, só elegíveis, ocultar os que já tenho) e botão Selecionar.
  * Estado da tela: app.browse (o que está sendo escolhido) e app.bf (filtros da lista).
  */
+import { draftUpdate } from './plan-draft.js';
 import { MODULE_ID } from '../../constants.js';
 import { escapeHtml, fold, actorClasses, plainText } from '../core/t20.js';
 import { BASE_CLASSES, classInfo, gainsAt, prerequisiteText, evaluatePrerequisites } from './planner-rules.js';
@@ -23,7 +24,7 @@ export const catOf = p => {
   return 'raca';
 };
 
-const flag = (app, path, value) => app.actor.update({ [`flags.${MODULE_ID}.plan.levels.${app.selected}${path ? `.${path}` : ''}`]: value });
+const flag = (app, path, value) => draftUpdate(app, { [`flags.${MODULE_ID}.plan.levels.${app.selected}${path ? `.${path}` : ''}`]: value });
 /* ---------- Aumento de Atributo: uma vez por patamar para o mesmo atributo (JdA, poderes gerais) ----------
  * O patamar é um portão: até o fim do patamar N, o mesmo atributo pode ter no máximo N aumentos.
  * Quem não pegou o aumento no patamar iniciante pode pegar dois no veterano, e assim por diante. */
@@ -47,7 +48,7 @@ export function aumentosPorAtributo(app, skipLevel = null, skipGain = null) {
   for (const [lv, entry] of Object.entries(app.ctxData?.plan ?? {})) {
     for (const [gid, uuid] of Object.entries(entry?.picks ?? {})) {
       if (Number(lv) === skipLevel && gid === skipGain) continue;
-      const a = aumentoAttr(app.index.powers.find(p => p.uuid === uuid)?.name ?? '');
+      const a = aumentoAttr(app.index.powerByUuid.get(uuid)?.name ?? '');
       if (a) add(a, Number(lv), `${lv}º nível (plano)`);
     }
   }
@@ -76,7 +77,7 @@ export function aumentoBloqueio(app, a, level, skipGain = null) {
 /** Perícias de Inteligência que o nível `level` dá pelo Aumento de Atributo (Inteligência) escolhido nele. */
 export function intSkillGain(app, level) {
   const entry = app.ctxData?.plan?.[level] ?? {};
-  const n = Object.values(entry.picks ?? {}).filter(u => aumentoAttr(app.index.powers.find(p => p.uuid === u)?.name ?? '') === 'int').length;
+  const n = Object.values(entry.picks ?? {}).filter(u => aumentoAttr(app.index.powerByUuid.get(u)?.name ?? '') === 'int').length;
   if (!n) return { want: 0, picks: [] };
   const before = app.prereqContext(level).attributes.int ?? 0;
   const want = intBonusSkills(before + n) - intBonusSkills(before);
@@ -204,7 +205,7 @@ function renderGain(app, gain, row, entry, ctx) {
     return `<div class="t20tk-lv-slot"><header><small>${escapeHtml(gain.label)}</small></header><ul class="t20tk-wz-tiles">${options.map(p => `<li><button type="button" class="t20tk-wz-tile ${picks[gain.id] === p.uuid ? 'is-on' : ''}" data-action="lvPick" data-gain="${gain.id}" data-value="${p.uuid}"><b>${escapeHtml(p.name)}</b><small>${escapeHtml(strip(p.description).slice(0, 110))}…</small></button></li>`).join('')}</ul></div>`;
   }
   if (gain.kind === 'power') {
-    const chosen = picks[gain.id] ? app.index.powers.find(p => p.uuid === picks[gain.id]) : null;
+    const chosen = picks[gain.id] ? app.index.powerByUuid.get(picks[gain.id]) : null;
     const body = chosen
       ? `<ul class="t20tk-wz-list t20tk-lv-chosen">${powerCard(app, chosen, ctx)}</ul>${physicalNote(app, chosen)}${chosen.tipo === 'distincao' ? '<p class="t20tk-bz-note">Distinção: só vale se o personagem foi admitido (combine com o mestre).</p>' : ''}`
       : '<p class="t20tk-lv-empty">Não escolhido</p>';
@@ -343,12 +344,12 @@ export function renderExtraPage(app) {
         return `<button type="button" class="t20tk-xg-attr ${x.value === k ? 'is-on' : ''}" data-action="lvExtraValue" data-value="${k}"><small>${k.toUpperCase()}</small><b>${cur >= 0 ? '+' : ''}${cur} → ${cur + 1 >= 0 ? '+' : ''}${cur + 1}</b></button>`;
       }).join('')}</div>`;
     } else {
-      const chosen = x.value ? app.index.powers.find(p => p.uuid === x.value) : null;
+      const chosen = x.value ? app.index.powerByUuid.get(x.value) : null;
       pick = chosen
         ? `<div class="t20tk-lv-gain" data-kind="power">${chosen.img ? `<img src="${escapeHtml(chosen.img)}" alt="">` : '<span class="t20tk-wz-noimg">✦</span>'}<span><small>${escapeHtml(type.label)}</small><b>${escapeHtml(chosen.name)}</b><em>${escapeHtml(strip(chosen.description).slice(0, 120))}…</em></span><button type="button" class="t20tk-ui-button" data-action="lvBrowse" data-kind="extra">Trocar…</button></div>`
         : `<button type="button" class="t20tk-xg-choose" data-action="lvBrowse" data-kind="extra"><b>Escolher ${escapeHtml(type.label.toLowerCase())}…</b><small>abre a lista com busca e filtros</small></button>`;
     }
-    const label = x.type === 'pericia' ? skillLabels()[x.value] : x.type === 'atributo' ? (x.value ? `+1 em ${x.value.toUpperCase()}` : '') : app.index.powers.find(p => p.uuid === x.value)?.name;
+    const label = x.type === 'pericia' ? skillLabels()[x.value] : x.type === 'atributo' ? (x.value ? `+1 em ${x.value.toUpperCase()}` : '') : app.index.powerByUuid.get(x.value)?.name;
     form = `<section class="t20tk-wz-box t20tk-xg-new"><header><b>Novo ganho</b><small>Registre o que a campanha deu ao personagem. Fica no histórico e pode ser desfeito.</small></header>
       <div class="t20tk-xg-step"><span>1</span><b>Tipo</b></div><div class="t20tk-xg-types">${types}</div>
       <div class="t20tk-xg-step"><span>2</span><b>Escolha</b></div><div class="t20tk-xg-pick">${pick}</div>
@@ -375,7 +376,7 @@ export const LEVEL_ACTIONS = {
     const cur = this.ctxData.plan[this.selected]?.cls;
     this.browse = null;
     if (fold(cur ?? '') === fold(value)) return this.render();
-    await this.actor.update({ [`flags.${MODULE_ID}.plan.levels.-=${this.selected}`]: null });
+    await draftUpdate(this, { [`flags.${MODULE_ID}.plan.levels.-=${this.selected}`]: null });
     await flag(this, '', { cls: value, picks: {} });
   },
   lvBrowse(event, target) {

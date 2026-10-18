@@ -4,6 +4,7 @@
  * Oficina: fabricar engenhocas a partir das magias dos compêndios.
  * Aparatos: instalar e remover aparatos (Heróis de Arton).
  */
+import { watchActor } from '../ui/live-refresh.js';
 import { enrichDescription } from '../ui/enrich.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { SPELL_TYPES, SPELL_SCHOOLS, CIRCLES, escapeHtml, fold } from '../core/t20.js';
@@ -128,8 +129,7 @@ export class EngenhocasApp extends ApplicationV2 {
   }
 
   _onFirstRender() {
-    const refresh = (doc) => { if (this.actor && (doc === this.actor || doc?.parent === this.actor) && this.rendered) this.render(); };
-    for (const hook of ['createItem', 'deleteItem', 'updateItem', 'updateActor']) this._hooks.push([hook, Hooks.on(hook, refresh)]);
+    watchActor(this);
     syncEngenhocas(this.actor).catch(error => console.warn('[T20 Toolkit] Não deu para acertar as engenhocas da ficha:', error));
   }
 

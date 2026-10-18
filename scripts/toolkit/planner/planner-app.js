@@ -5,6 +5,8 @@
  * Aplicar um nível: sobe system.niveis da classe (ou cria a classe), adiciona as habilidades
  * do nível pela tabela do livro e os poderes escolhidos. PV/PM o próprio sistema recalcula.
  */
+import { planFlag, draftUpdate, flushDraft, isOwnDraft } from './plan-draft.js';
+import { watchActor, batch, COMBAT_PATHS } from '../ui/live-refresh.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { MODULE_ID } from '../../constants.js';
 import { escapeHtml, fold, actorClasses, arcanistPaths } from '../core/t20.js';
@@ -22,6 +24,9 @@ import { renderWizard, bindWizard, WIZARD_ACTIONS } from './creation-wizard.js';
 import { renderLevelEditor, bindLevelEditor, LEVEL_ACTIONS, renderExtraPage, aumentoAttr, intSkillGain } from './level-view.js';
 import { renderDoneLevel, RETRAIN_ACTIONS } from './retrain-view.js';
 
+/** Ações que gravam várias vezes: a janela redesenha uma vez no fim. */
+const inBatch = fn => function (event, target) { return batch(this, async () => { await flushDraft(this.actor); return fn.call(this, event, target); }); };
+
 const ApplicationV2 = globalThis.foundry?.applications?.api?.ApplicationV2 ?? class {};
 const MARK = { ok: '✔', missing: '✘', review: '?', none: '' };
 const norm = v => fold(v).replace(/[^a-z0-9º ]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -34,14 +39,14 @@ export class PlannerApp extends ApplicationV2 {
     position: { width: 1040, height: 760 },
     actions: {
       pickLevel: PlannerApp.#onPickLevel,
-      apply: PlannerApp.#onApply,
-      undo: PlannerApp.#onUndo,
+      apply: inBatch(PlannerApp.#onApply),
+      undo: inBatch(PlannerApp.#onUndo),
       clearLevel: PlannerApp.#onClearLevel,
       rollAttributes: PlannerApp.#onRollAttributes,
       attrStep: PlannerApp.#onAttrStep,
-      addExtra: PlannerApp.#onAddExtra,
-      removeExtra: PlannerApp.#onRemoveExtra,
-      applyCreation: PlannerApp.#onApplyCreation,
+      addExtra: inBatch(PlannerApp.#onAddExtra),
+      removeExtra: inBatch(PlannerApp.#onRemoveExtra),
+      applyCreation: inBatch(PlannerApp.#onApplyCreation),
       openBuscador: PlannerApp.#onOpenBuscador,
       theme: PlannerApp.#onTheme,
       t20nav: onNavigate,
@@ -68,7 +73,7 @@ export class PlannerApp extends ApplicationV2 {
     const actor = this.actor;
     const classes = actorClasses(actor);
     const current = classes.reduce((s, c) => s + c.level, 0);
-    const plan = actor?.getFlag?.(MODULE_ID, 'plan')?.levels ?? {};
+    const plan = planFlag(actor).levels ?? {};
     const history = actor?.getFlag?.(MODULE_ID, 'history') ?? {};
     const timeline = buildTimeline(classes.map(c => ({ name: c.name, level: c.level })), plan);
     // Níveis já aplicados também podem ser abertos (ver o que entrou e retreinar).
@@ -88,7 +93,7 @@ export class PlannerApp extends ApplicationV2 {
       if (row.done || row.level > level || !row.cls) continue;
       classLevels[fold(row.cls)] = row.classLevel;
       const p = c.plan[row.level]?.picks ?? {};
-      for (const uuid of Object.values(p)) { const pw = this.index.powers.find(x => x.uuid === uuid); if (pw && row.level < level) powers.add(pw.key); }
+      for (const uuid of Object.values(p)) { const pw = this.index.powerByUuid.get(uuid); if (pw && row.level < level) powers.add(pw.key); }
       for (const g of gainsAt(row.cls, row.classLevel).gains) if (g.kind === 'ability' && row.level < level) powers.add(fold(g.item));
     }
     const skills = new Set();
@@ -110,7 +115,7 @@ export class PlannerApp extends ApplicationV2 {
     for (const row of c.timeline) {
       if (row.done || row.level >= level) continue;
       for (const uuid of Object.values(c.plan[row.level]?.picks ?? {})) {
-        const a = aumentoAttr(this.index.powers.find(x => x.uuid === uuid)?.name ?? '');
+        const a = aumentoAttr(this.index.powerByUuid.get(uuid)?.name ?? '');
         if (a) attributes[a] = (attributes[a] ?? 0) + 1;
       }
     }
@@ -246,18 +251,19 @@ export class PlannerApp extends ApplicationV2 {
   }
 
   _onFirstRender() {
-    const refresh = (doc) => { const a = doc?.parent ?? doc; if (a === this.actor && this.rendered) this.render(); };
-    for (const hook of ['createItem', 'deleteItem', 'updateItem', 'updateActor']) this._hooks.push([hook, Hooks.on(hook, refresh)]);
+    // O rascunho do próprio Planejador já foi desenhado na hora do clique (plan-draft.js).
+    watchActor(this, { ignore: COMBAT_PATHS, skip: (hook, doc, changed, options, userId) => hook === 'updateActor' && isOwnDraft(options, userId) });
   }
 
   _onClose(options) {
+    flushDraft(this.actor);
     for (const [hook, id] of this._hooks) Hooks.off(hook, id);
     this._hooks = [];
     super._onClose?.(options);
   }
 
   async #clear(level) {
-    await this.actor.update({ [`flags.${MODULE_ID}.plan.levels.-=${level}`]: null });
+    await draftUpdate(this, { [`flags.${MODULE_ID}.plan.levels.-=${level}`]: null });
   }
 
   /* ---------- ações ---------- */
@@ -270,13 +276,14 @@ export class PlannerApp extends ApplicationV2 {
     const KIND = { geral: 'Poder geral', classe: 'Poder de classe', concedido: 'Poder concedido', distincao: 'Poder de distinção', pericia: 'Perícia treinada', atributo: '+1 em atributo' };
     const level = actorClasses(actor).reduce((s, c) => s + c.level, 0);
     let entry = null;
+    const update = {};
     if (x.type === 'pericia') {
       const label = skillLabels()[x.value] ?? x.value;
-      await actor.update({ [`system.pericias.${x.value}.treinado`]: true });
+      update[`system.pericias.${x.value}.treinado`] = true;
       entry = { type: 'pericia', key: x.value, label };
     } else if (x.type === 'atributo') {
       const cur = Number(actor.system?.atributos?.[x.value]?.base) || 0;
-      await actor.update({ [`system.atributos.${x.value}.base`]: cur + 1 });
+      update[`system.atributos.${x.value}.base`] = cur + 1;
       entry = { type: 'atributo', key: x.value, label: `+1 em ${x.value.toUpperCase()}` };
     } else {
       const doc = await fromUuid(x.value);
@@ -288,7 +295,7 @@ export class PlannerApp extends ApplicationV2 {
     }
     entry = { ...entry, kindLabel: KIND[x.type], reason, level, by: game.user?.name ?? '' };
     const list = [...(actor.getFlag(MODULE_ID, 'extraGains') ?? []), entry];
-    await actor.setFlag(MODULE_ID, 'extraGains', list);
+    await actor.update({ ...update, [`flags.${MODULE_ID}.extraGains`]: list });
     await postCard(actor, { tool: 'planner', tone: 'success', title: 'Ganho fora da progressão', subtitle: `${actor.name} · ${KIND[x.type]}`, items: [{ name: entry.label, img: entry.img }], note: reason ? `Motivo: ${reason}` : '' });
     this.extra = { type: x.type, value: '', reason: '' };
     this.render();
@@ -300,10 +307,10 @@ export class PlannerApp extends ApplicationV2 {
     const list = [...(actor.getFlag(MODULE_ID, 'extraGains') ?? [])];
     const [g] = list.splice(Number(target.dataset.index), 1);
     if (!g) return;
-    if (g.itemId) await actor.items.get(g.itemId)?.delete();
-    if (g.type === 'pericia') await actor.update({ [`system.pericias.${g.key}.treinado`]: false });
-    if (g.type === 'atributo') await actor.update({ [`system.atributos.${g.key}.base`]: (Number(actor.system?.atributos?.[g.key]?.base) || 0) - 1 });
-    await actor.setFlag(MODULE_ID, 'extraGains', list);
+    const update = { [`flags.${MODULE_ID}.extraGains`]: list };
+    if (g.type === 'pericia') update[`system.pericias.${g.key}.treinado`] = false;
+    if (g.type === 'atributo') update[`system.atributos.${g.key}.base`] = (Number(actor.system?.atributos?.[g.key]?.base) || 0) - 1;
+    await Promise.all([g.itemId ? actor.items.get(g.itemId)?.delete() : null, actor.update(update)]);
     this.render();
   }
 
@@ -324,7 +331,7 @@ export class PlannerApp extends ApplicationV2 {
     if (ig.picks.length < ig.want) missing.push(`${ig.want - ig.picks.length} perícia(s) por Inteligência`);
     const summary = [];
     const ctx = this.prereqContext(level);
-    const unmet = Object.values(entry.picks ?? {}).filter(Boolean).map(u => this.index.powers.find(p => p.uuid === u))
+    const unmet = Object.values(entry.picks ?? {}).filter(Boolean).map(u => this.index.powerByUuid.get(u))
       .filter(p => p && evaluatePrerequisites(prerequisiteText(p.description), ctx).status === 'missing');
     const ok = await foundry.applications.api.DialogV2.confirm({
       window: { title: `Aplicar ${level}º nível` },
@@ -353,18 +360,18 @@ export class PlannerApp extends ApplicationV2 {
       }
       summary.push(`${row.cls} ${row.classLevel}`);
       // 2) Habilidades do nível e escolhas
-      const toCreate = [];
+      const uuids = [];
       for (const gain of g.gains) {
         let uuid = null;
         if (gain.kind === 'ability' && !this.ownsPower(gain.item)) uuid = this.findAbility(row.cls, gain.item)?.uuid;
         if ((gain.kind === 'power' || gain.kind === 'path') && entry.picks?.[gain.id]) uuid = entry.picks[gain.id];
-        if (!uuid) continue;
-        const doc = await fromUuid(uuid);
-        if (!doc) continue;
+        if (uuid) uuids.push(uuid);
+      }
+      const toCreate = (await Promise.all(uuids.map(u => fromUuid(u)))).filter(Boolean).map(doc => {
         const data = game.items.fromCompendium(doc);
         foundry.utils.setProperty(data, `flags.${MODULE_ID}.plannerLevel`, level);
-        toCreate.push(data);
-      }
+        return data;
+      });
       if (toCreate.length) {
         const docs = await actor.createEmbeddedDocuments('Item', toCreate);
         created.push(...docs.map(d => d.id));
@@ -373,11 +380,11 @@ export class PlannerApp extends ApplicationV2 {
       // 3) Perícias novas pelo Aumento de Atributo (Inteligência)
       const trained = ig.picks.filter(k => !actor.system?.pericias?.[k]?.treinado);
       if (trained.length) {
-        await actor.update(Object.fromEntries(trained.map(k => [`system.pericias.${k}.treinado`, true])));
         const labels = skillLabels();
         summary.push(...trained.map(k => `Treinado em ${labels[k] ?? k}`));
       }
       await actor.update({
+        ...Object.fromEntries(trained.map(k => [`system.pericias.${k}.treinado`, true])),
         [`flags.${MODULE_ID}.history.${level}`]: { cls: row.cls, classLevel: row.classLevel, classId, classCreated, created, trained },
         [`flags.${MODULE_ID}.plan.levels.-=${level}`]: null
       });
@@ -407,24 +414,22 @@ export class PlannerApp extends ApplicationV2 {
     });
     if (!ok) return;
     if (h.creation) {
-      await undoCreation(actor, h);
-      await actor.update({ [`flags.${MODULE_ID}.history.-=${level}`]: null });
+      await undoCreation(actor, h, { [`flags.${MODULE_ID}.history.-=${level}`]: null });
       this.selected = 1;
       return;
     }
     const ids = (h.created ?? []).filter(id => actor.items.get(id));
     if (h.classCreated && actor.items.get(h.classId)) ids.push(h.classId);
-    if (ids.length) await actor.deleteEmbeddedDocuments('Item', ids);
-    if (h.trained?.length) await actor.update(Object.fromEntries(h.trained.map(k => [`system.pericias.${k}.treinado`, false])));
-    if (!h.classCreated) {
-      const cls = actor.items.get(h.classId);
-      if (cls) await cls.update({ 'system.niveis': Math.max(1, (parseInt(cls.system.niveis) || 1) - 1) });
-    }
-    await actor.update({ [`flags.${MODULE_ID}.history.-=${level}`]: null });
+    const cls = h.classCreated ? null : actor.items.get(h.classId);
+    await Promise.all([
+      ids.length ? actor.deleteEmbeddedDocuments('Item', ids) : null,
+      cls ? cls.update({ 'system.niveis': Math.max(1, (parseInt(cls.system.niveis) || 1) - 1) }) : null,
+      actor.update({ ...Object.fromEntries((h.trained ?? []).map(k => [`system.pericias.${k}.treinado`, false])), [`flags.${MODULE_ID}.history.-=${level}`]: null })
+    ]);
     this.selected = level;
   }
 
-  static async #onRollAttributes() { await rollCreationAttributes(this.actor); }
+  static async #onRollAttributes() { await flushDraft(this.actor); await rollCreationAttributes(this.actor); }
 
   static async #onApplyCreation() {
     await applyCreation(this);
@@ -432,7 +437,7 @@ export class PlannerApp extends ApplicationV2 {
   }
 
   static #onOpenBuscador() { game.t20Toolkit?.buscador?.open({ actor: this.actor }); }
-  static async #onAttrStep(event, target) { await stepCreationAttribute(this.actor, target.dataset.attr, target.dataset.delta); }
+  static async #onAttrStep(event, target) { await stepCreationAttribute(this, target.dataset.attr, target.dataset.delta); }
   static async #onTheme(event, target) { await switchTheme(target.dataset.themeValue); }
   static #onOpenSheet() { this.actor?.sheet?.render(true); }
 }

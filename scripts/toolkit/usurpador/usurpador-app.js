@@ -9,6 +9,7 @@
  * escolhe a perícia do teste (Enganação ou a que um poder põe no lugar) e os bônus. Depois de passar,
  * a janela de conjuração do sistema abre já com os mesmos aprimoramentos marcados.
  */
+import { watchActor } from '../ui/live-refresh.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { MODULE_ID } from '../../constants.js';
 import { postCard, chatFlavor } from '../ui/chat.js';
@@ -85,10 +86,8 @@ export class UsurpadorApp extends ApplicationV2 {
   get title() { return this.actor ? `Usurpador — ${this.actor.name}` : 'Usurpador'; }
 
   async _prepareContext() {
-    this.index ??= await getSpellIndex();
-    this.catalog ??= await getSpellCatalog();
+    if (!this.index || !this.catalog || !this.powers) [this.index, this.catalog, this.powers] = await Promise.all([getSpellIndex(), getSpellCatalog(), getGrantedPowerIndex()]);
     this.sfOptions ??= filterOptions(this.catalog.spells.filter(s => ['div', 'uni'].includes(s.type)), this.catalog.packs);
-    this.powers ??= await getGrantedPowerIndex();
     const actor = this.actor;
     const profile = buildCasterProfiles({ classes: actorClasses(actor) }).find(p => p.id === 'usurpador') ?? null;
     const state = actor?.getFlag?.(MODULE_ID, 'usurpador') ?? {};
@@ -165,7 +164,11 @@ export class UsurpadorApp extends ApplicationV2 {
   #zero(dc, setup) { return !!this.test.zero && this.#canZero(dc, setup); }
 
   async #saveTest() {
-    if (this.actor?.isOwner) await this.actor.setFlag(MODULE_ID, TEST_FLAG, foundry.utils.deepClone(this.test));
+    if (!this.actor?.isOwner) return;
+    // Só grava se mudou: cada gravação vai para todos os conectados.
+    const saved = this.actor.getFlag(MODULE_ID, TEST_FLAG);
+    if (saved && foundry.utils.objectsEqual(saved, this.test)) return;
+    await this.actor.setFlag(MODULE_ID, TEST_FLAG, foundry.utils.deepClone(this.test));
   }
 
   /** Rola o teste montado (ou escolhe 0) e posta no chat. */
@@ -394,8 +397,11 @@ export class UsurpadorApp extends ApplicationV2 {
   }
 
   _onFirstRender() {
-    const refresh = (doc) => { const a = doc?.parent ?? doc; if (a === this.actor && this.rendered) this.render(); };
-    for (const hook of ['createItem', 'deleteItem', 'updateItem', 'updateActor', 'createActiveEffect', 'deleteActiveEffect', 'updateActiveEffect']) this._hooks.push([hook, Hooks.on(hook, refresh)]);
+    // O efeito temporário do Roubo Divino entra e sai durante a conjuração: não pede redesenho.
+    watchActor(this, {
+      hooks: ['createItem', 'deleteItem', 'updateItem', 'updateActor', 'createActiveEffect', 'deleteActiveEffect', 'updateActiveEffect'],
+      skip: (hook, doc) => hook.endsWith('ActiveEffect') && doc?.getFlag?.(MODULE_ID, 'temp') === 'roubo-divino'
+    });
   }
 
   _onClose(options) {
@@ -406,8 +412,14 @@ export class UsurpadorApp extends ApplicationV2 {
 
   /** Substitui (não mescla) o registro do poder capturado. */
   async #saveCapture(capture) {
-    await this.actor.unsetFlag(MODULE_ID, 'usurpador');
-    if (capture) await this.actor.setFlag(MODULE_ID, 'usurpador', { capture });
+    if (!capture) return this.actor.unsetFlag(MODULE_ID, 'usurpador');
+    // Uma gravação só: os campos novos e a remoção dos que saíram (em vez de apagar tudo e gravar de novo).
+    const base = `flags.${MODULE_ID}.usurpador`;
+    const old = this.actor.getFlag(MODULE_ID, 'usurpador') ?? {};
+    const update = { [`${base}.capture`]: capture };
+    for (const key of Object.keys(old)) if (key !== 'capture') update[`${base}.-=${key}`] = null;
+    for (const key of Object.keys(old.capture ?? {})) if (!(key in capture)) update[`${base}.capture.-=${key}`] = null;
+    return this.actor.update(update);
   }
 
   /** Aprimoramentos da magia (os da própria magia e os da ficha que valem para ela), como o sistema os lista. */

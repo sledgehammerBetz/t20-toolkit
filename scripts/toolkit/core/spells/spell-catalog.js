@@ -1,6 +1,6 @@
 /**
  * Catálogo classificado de magias (compartilhado pelo Buscador, Oficina das Engenhocas, Escriba, Grimório e Usurpador).
- * Lê os compêndios com pack.getIndex({fields: ['system', 'effects']}) — sem carregar Documents — e monta, para cada magia,
+ * Carrega só as magias (pack.getDocuments({ type: 'magia' }), em paralelo, apenas nos compêndios que têm magias) e monta, para cada uma,
  * os campos estruturados (execução, alcance, duração, resistência, alvo/área/efeito) e o perfil semântico
  * (função, elemento, condições, alvos, proteção), inclusive o que os aprimoramentos mudam.
  */
@@ -8,6 +8,8 @@ import { fold } from '../t20.js';
 import { spellTypeFromSystem, resistanceText, hasResistance, resistanceSkillKey, durationText, eng4ExecutionKey, eng4RangeKey, eng4DurationKey } from './spell-metadata.js';
 import { htmlToPlainText, extractEnhancements } from './enhancement-content.js';
 import { refreshSpellSemantics } from './spell-semantics.js';
+import { spellPacks } from '../spell-index.js';
+import { readPack, writePack } from '../pack-cache.js';
 
 const clean = v => String(v ?? '').trim();
 const num = (v, d = 0) => Number.isFinite(Number(v)) ? Number(v) : d;
@@ -69,35 +71,34 @@ export function classifySpell(entry, pack = {}) {
 
 let cache = null;
 
+/** Magias de um compêndio como objetos simples (com uuid e efeitos completos). Usa o cache do navegador quando dá. */
+async function packSpells(pack, refresh, gameRef) {
+  if (!refresh) {
+    const hit = await readPack('spells', pack, gameRef);
+    if (hit) return hit;
+  }
+  // O índice básico (nome, tipo…) o Foundry já carrega ao entrar no mundo: serve para pular os compêndios sem magias.
+  const index = pack.index?.size ? pack.index : await pack.getIndex();
+  let out = [];
+  if ([...index].some(e => e.type === 'magia')) {
+    out = (await pack.getDocuments({ type: 'magia' })).map(d => ({ ...(d.toObject ? d.toObject() : d), uuid: d.uuid }));
+  }
+  writePack('spells', pack, out, gameRef);
+  return out;
+}
+
 /** Catálogo de todas as magias dos compêndios de Item do sistema e módulos. */
 export async function getSpellCatalog({ refresh = false, gameRef = globalThis.game } = {}) {
   if (cache && !refresh) return cache;
   const spells = [];
   const packs = [];
-  for (const pack of [...(gameRef?.packs ?? [])].filter(p => p.documentName === 'Item' && (!p.metadata?.system || p.metadata.system === 'tormenta20'))) {
-    try {
-      const index = await pack.getIndex({ fields: ['type', 'img', 'system', 'effects'] });
-      const entries = [...index].filter(e => e.type === 'magia');
-      // No Foundry o índice do compêndio traz os efeitos (aprimoramentos) só como ids — ou nem traz.
-      // Sem os efeitos completos, "considerar aprimoramentos" não tem o que comparar: carrega os documentos.
-      const fullEffects = entries.some(e => Array.isArray(e.effects) && e.effects.some(x => x && typeof x === 'object' && (x.changes || x.flags)));
-      let docs = null;
-      if (entries.length && !fullEffects && typeof pack.getDocuments === 'function') {
-        try { docs = new Map((await pack.getDocuments({ type: 'magia' })).map(d => [d.id ?? d._id, d])); } catch (error) {
-          console.warn(`[T20 Toolkit] Catálogo de magias: não foi possível carregar os aprimoramentos de ${pack.collection}:`, error);
-        }
-      }
-      let n = 0;
-      for (const entry of entries) {
-        const doc = docs?.get(entry._id);
-        const effects = doc ? [...(doc.effects ?? [])].map(e => (e.toObject ? e.toObject() : e)) : entry.effects;
-        spells.push(classifySpell({ ...entry, effects }, pack));
-        n++;
-      }
-      if (n) packs.push({ id: pack.collection, label: pack.metadata?.label ?? pack.collection, count: n });
-    } catch (error) {
-      console.warn(`[T20 Toolkit] Catálogo de magias: não foi possível ler ${pack.collection}:`, error);
-    }
+  const loaded = await Promise.all(spellPacks(gameRef).map(pack => packSpells(pack, refresh, gameRef).then(
+    entries => ({ pack, entries }),
+    error => { console.warn(`[T20 Toolkit] Catálogo de magias: não foi possível ler ${pack.collection}:`, error); return { pack, entries: [] }; }
+  )));
+  for (const { pack, entries } of loaded) {
+    for (const entry of entries) spells.push(classifySpell(entry, pack));
+    if (entries.length) packs.push({ id: pack.collection, label: pack.metadata?.label ?? pack.collection, count: entries.length });
   }
   spells.sort((a, b) => (a.circle ?? 9) - (b.circle ?? 9) || a.name.localeCompare(b.name, 'pt-BR'));
   cache = Object.freeze({ spells: Object.freeze(spells), packs: Object.freeze(packs), byUuid: new Map(spells.map(s => [s.uuid, s])) });
