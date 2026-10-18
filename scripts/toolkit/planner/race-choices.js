@@ -52,14 +52,20 @@ export const RACE_ABILITY_CHOICES = Object.freeze({
   'vanguardista': { text: '+2 em um Ofício à escolha.', slots: [{ kind: 'note', label: 'Ofício', crafts: true }] },
   'tabu': { text: '−5 em uma perícia, conforme o tabu.', slots: [{ kind: 'note', label: 'Penalidade em', options: ['Diplomacia', 'Iniciativa', 'Luta', 'Percepção'] }] },
   'natureza animal': { text: '+1 em um atributo.', slots: [{ kind: 'attr' }] },
-  'dons': { text: '+1 em dois atributos diferentes.', slots: [{ kind: 'attr' }, { kind: 'attr', distinct: true }] }
+  'dons': { text: '+1 em dois atributos diferentes.', slots: [{ kind: 'attr' }, { kind: 'attr', distinct: true }] },
+  // talentos e maravilhas escolhidos nos bancos
+  'armadilha terrivel': { text: 'Uma magia de 1º círculo que cause dano ou efeito negativo, guardada na armadilha portátil.', slots: [{ kind: 'spell', asNote: true }] },
+  'ex familiar': { text: 'Os benefícios de um familiar básico de arcanista (Tormenta20, p. 38).', slots: [{ kind: 'power', power: 'familiar' }] },
+  'metamorfose animal': { text: 'Uma forma selvagem do druida (Tormenta20, p. 63).', slots: [{ kind: 'note', label: 'Forma', options: ['Ágil', 'Feroz', 'Resistente', 'Sorrateira', 'Veloz'] }] },
+  'caminho da perfeicao': { text: '+2 em uma perícia treinada.', slots: [{ kind: 'note', label: '+2 em', skills: true }] }
 });
 
 export const abilityKey = name => fold(name).replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 /**
  * Bancos de habilidades raciais. `match(power)` decide se o poder pertence ao banco.
- * `count` = quantas escolher; `min` = mínimo (0 = opcional). `coreOnly: false` = só raças fora do livro básico.
+ * `count` = quantas escolher; `min` = mínimo (0 = opcional). `notCore` = só a versão fora do livro básico.
+ * `levelUp` = banco que pode ocupar um poder de classe, uma vez por patamar, ao subir de nível.
  */
 export const RACE_POOLS = Object.freeze({
   golem: { race: 'golem', notCore: true, pools: [
@@ -72,9 +78,9 @@ export const RACE_POOLS = Object.freeze({
     { id: 'natureza', label: 'Natureza', count: 1, min: 1, match: n => n.startsWith('natureza') },
     { id: 'presentes', label: 'Presentes', count: 3, min: 3, match: () => true }
   ] },
-  kallyanach: { race: 'kallyanach', pools: [{ id: 'bencaos', label: 'Bênçãos dracônicas', count: 2, min: 2, note: 'Confira no livro quantas bênçãos o mestre libera.', match: () => true }] },
-  mashin: { race: 'mashin', pools: [{ id: 'maravilha', label: 'Maravilha mecânica', count: 1, min: 0, note: 'Opcional: substitui uma das perícias do Chassi.', match: () => true }] },
-  kobolds: { race: 'kobolds', pools: [{ id: 'talentos', label: 'Talentos do bando', count: 2, min: 0, note: 'Confira no livro quantos talentos o bando recebe.', match: () => true }] }
+  kallyanach: { race: 'kallyanach', levelUp: 'bencaos', pools: [{ id: 'bencaos', label: 'Bênçãos dracônicas', count: 2, min: 2, note: 'Confira no livro quantas bênçãos o mestre libera.', match: () => true }] },
+  mashin: { race: 'mashin', levelUp: 'maravilha', pools: [{ id: 'maravilha', label: 'Maravilha mecânica', count: 1, min: 0, note: 'Opcional: substitui uma das perícias do Chassi.', match: () => true }] },
+  kobolds: { race: 'kobolds', levelUp: 'talentos', pools: [{ id: 'talentos', label: 'Talentos do bando', count: 2, min: 0, note: 'Confira no livro quantos talentos o bando recebe.', match: () => true }] }
 });
 
 /**
@@ -149,6 +155,9 @@ export function raceChoiceProblems(choices, picks = {}, pools = [], poolPicks = 
   return [...new Set(out)];
 }
 
+/** Familiares básicos do arcanista (Tormenta20, p. 38), um item de poder por tipo no compêndio. */
+const BASIC_FAMILIARS = /^familiar (borboleta|cobra|coruja|corvo|falcao|gato|lagarto|morcego|rato|sapo)$/;
+
 /** Filtro de poderes por grupo. */
 export function powerGroupFilter(group) {
   return p => {
@@ -157,6 +166,8 @@ export function powerGroupFilter(group) {
     if (group === 'origem') return p.tipo === 'origem';
     if (group === 'geralOuOrigem') return p.tipo === 'geral' || p.tipo === 'origem';
     if (group === 'classe') return p.tipo === 'classe';
+    if (group === 'combate') return p.tipo === 'geral' && fold(p.subtipo) === 'combate';
+    if (group === 'familiar') return p.tipo === 'classe' && BASIC_FAMILIARS.test(p.key);
     return false;
   };
 }

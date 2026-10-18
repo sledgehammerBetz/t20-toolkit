@@ -253,8 +253,19 @@ export function originSlots(cr, rules = getTableRules(), noOrigin = false) {
 
 /* ---------- HTML ---------- */
 
-export function sel(name, options, current, { placeholder = '— escolha —', attrs = '' } = {}) {
-  return `<select name="${name}" ${attrs}><option value="">${placeholder}</option>${options.map(o => `<option value="${escapeHtml(o.value)}" ${String(current ?? '') === String(o.value) ? 'selected' : ''} ${o.disabled ? 'disabled' : ''}>${escapeHtml(o.label)}</option>`).join('')}</select>`;
+/** Grupo de chips que grava um campo da criação (ação wzSet; clicar de novo limpa). */
+export function chipField(field, options, current, { num = false } = {}) {
+  return `<div class="t20tk-wz-chips">${options.map(o => `<button type="button" class="t20tk-chip ${String(current ?? '') === String(o.value) ? 'is-on' : ''}" data-action="wzSet" data-field="${escapeHtml(field)}" data-value="${escapeHtml(o.value)}" ${num ? 'data-num="1"' : ''} ${o.disabled ? `disabled title="${escapeHtml(o.reason ?? '')}"` : ''}>${escapeHtml(o.label)}</button>`).join('')}</div>`;
+}
+
+/**
+ * Vaga que abre o buscador do assistente (em vez de menu suspenso): mostra o escolhido e "Escolher…/Trocar…".
+ * `pool` = grupo de poderes (veja powerGroupFilter) ou 'spell'; `type`/`school` filtram magias.
+ */
+export function pickButton({ path, pool, title, item = null, type = '', school = '', asNote = false }) {
+  const attrs = `data-action="wzPickOpen" data-path="${escapeHtml(path)}" data-pool="${escapeHtml(pool)}" data-title="${escapeHtml(title)}" data-type="${escapeHtml(type)}" data-school="${escapeHtml(school)}"`;
+  return `<div class="t20tk-wz-pickslot ${item ? 'is-done' : ''}">${item ? `${item.img ? `<img src="${escapeHtml(item.img)}" alt="">` : '<span class="t20tk-wz-noimg">✦</span>'}<b>${escapeHtml(item.name)}</b>` : '<span class="t20tk-lv-empty">Não escolhido</span>'}${asNote && item ? '<small class="t20tk-bz-meta">anotada no chat, não vira magia na ficha</small>' : ''}
+    <button type="button" class="t20tk-ui-button ${item ? '' : 't20tk-ui-button--primary'}" ${attrs}>${item ? 'Trocar…' : 'Escolher…'}</button></div>`;
 }
 export const sign = n => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n)}`;
 
@@ -278,7 +289,7 @@ export function renderAttributes(cr, rules, race, age, bonus = {}, ex = {}) {
     let baseCell;
     if (method === 'points') baseCell = `<div class="t20tk-ac-step"><button type="button" data-action="attrStep" data-attr="${a}" data-delta="1" aria-label="Aumentar ${ATTR_LABELS[a]}" ${Number(cr.base?.[a] ?? 0) >= 4 ? 'disabled' : ''}>▲</button><output>${sign(base[a]) || '0'}</output><button type="button" data-action="attrStep" data-attr="${a}" data-delta="-1" aria-label="Diminuir ${ATTR_LABELS[a]}" ${Number(cr.base?.[a] ?? 0) <= -1 ? 'disabled' : ''}>▼</button></div>`;
     else if (vk) baseCell = `<output title="${vk.score[a]} na escala de 3 a 18">${sign(base[a]) || '0'}</output><small>${vk.score[a]}${vk.score[a] > 18 ? ' (máx. +4)' : ''}</small>`;
-    else baseCell = rolls.length ? sel(`assign.${a}`, rolls.map((r, i) => ({ value: i, label: `${sign(r.value) || '0'}${r.total !== null ? ` (${r.total})` : ''}`, disabled: used.has(String(i)) && String(cr.assign?.[a]) !== String(i) })), cr.assign?.[a], { placeholder: '—' }) : '<output>—</output>';
+    else baseCell = rolls.length ? `<div class="t20tk-ac-rolls">${chipField(`assign.${a}`, rolls.map((r, i) => ({ value: i, label: `${sign(r.value) || '0'}${r.total !== null ? ` (${r.total})` : ''}`, disabled: used.has(String(i)) && String(cr.assign?.[a]) !== String(i), reason: 'já usado em outro atributo' })), cr.assign?.[a], { num: true })}</div>` : '<output>—</output>';
     const cost = method === 'points' ? `<small>custo ${POINT_COST[Number(cr.base?.[a] ?? 0)] ?? '?'}</small>` : '';
     const o = other.total?.[a] ?? 0;
     const r = (racial[a] ?? 0) + o;
@@ -343,95 +354,35 @@ export function renderAttributes(cr, rules, race, age, bonus = {}, ex = {}) {
 
   return `<div class="t20tk-ac-head">${seg}${pill}</div>
     ${valk}
-    <div class="t20tk-ac"><div class="t20tk-ac-row t20tk-ac-th"><span>Atributo</span><span>Base</span><span></span><span>Raça e outros</span><span></span><span>Total</span></div>${rows}</div>
+    <div class="t20tk-ac ${!['points', 'valkaria'].includes(method) && rolls.length ? 't20tk-ac--rolls' : ''}"><div class="t20tk-ac-row t20tk-ac-th"><span>Atributo</span><span>Base</span><span></span><span>Raça e outros</span><span></span><span>Total</span></div>${rows}</div>
     <p class="t20tk-bz-note">${help}</p>
     ${method === 'points' && !v.ok && v.left < 0 ? `<p class="t20tk-bz-warn">${v.errors.map(escapeHtml).join(' ')}</p>` : ''}
-    ${!['points', 'valkaria'].includes(method) && rolls.length && !m.fixed ? `<p class="t20tk-bz-note">Distribua cada resultado em um atributo. Rolagens: ${rolls.map(r => `${r.total} → <b>${sign(r.value) || '0'}</b>`).join(' · ')}</p>` : ''}
+    ${!['points', 'valkaria'].includes(method) && rolls.length && !m.fixed ? `<p class="t20tk-bz-note">Clique num resultado em cada atributo (cada um só pode ser usado uma vez). Rolagens: ${rolls.map(r => `${r.total} → <b>${sign(r.value) || '0'}</b>`).join(' · ')}</p>` : ''}
     ${bonusBox}`;
 }
 
 export function renderAge(cr, rules, idx, age) {
   const rule = ageRuleFor(cr.ageRule, rules);
   const RULES = { off: 'Sem regra de idade', jda: 'Livro Básico (p. 108)', herois: 'Heróis de Arton (p. 288)' };
-  let html = `<label class="t20tk-pl-field">Regra de idade deste personagem ${sel('ageRule', ['off', ...allowedAgeRules(rules)].map(k => ({ value: k, label: RULES[k] })), rule)}</label>`;
-  if (rule === 'off') return html + '<p class="t20tk-bz-note">O mestre liberou regras de idade. Cada personagem escolhe a sua (ou nenhuma).</p>';
+  let html = `<div class="t20tk-wz-field"><span>Regra de idade deste personagem</span>${chipField('ageRule', ['off', ...allowedAgeRules(rules)].map(k => ({ value: k, label: RULES[k] })), rule)}</div>`;
+  if (rule === 'off') return html + '<p class="t20tk-bz-note">A idade vem antes dos atributos porque pode mudá-los. Sem regra, a idade é só descritiva.</p>';
   const table = rule === 'jda' ? AGE_JDA : AGE_HEROIS;
   const band = cr.age || 'jovem';
-  html += `<label class="t20tk-pl-field">Faixa etária ${sel('age', Object.entries(table).map(([k, v]) => ({ value: k, label: v.label })), band, { placeholder: '—' })}</label>`;
+  html += `<div class="t20tk-wz-field"><span>Faixa etária</span>${chipField('age', Object.entries(table).map(([k, v]) => ({ value: k, label: v.label })), band)}</div>`;
   const attrs = ATTRS.filter(a => age.attrs[a]).map(a => `${ATTR_LABELS[a]} ${sign(age.attrs[a])}`).join(', ');
-  if (attrs) html += `<p class="t20tk-bz-note"><b>Atributos:</b> ${attrs} (já somados na calculadora).</p>`;
+  if (attrs) html += `<p class="t20tk-bz-note"><b>Atributos:</b> ${attrs} (já somados na etapa Atributos).</p>`;
   if (age.features?.length) html += `<ul class="t20tk-pl-gains">${age.features.map(f => `<li data-kind="note">${escapeHtml(f)}</li>`).join('')}</ul>`;
   if (rule === 'herois' && band === 'adulto') {
     html += `<label class="t20tk-cr-check"><input type="checkbox" name="adultPower" ${cr.adultPower ? 'checked' : ''}> Já Vi Coisas: receber um poder geral (e uma complicação de idade)</label>`;
-    if (cr.adultPower) html += `<label class="t20tk-pl-field">Poder geral ${sel('agePower', generalPowerOptions(idx), cr.agePower)}</label>`;
+    if (cr.adultPower) html += `<div class="t20tk-wz-row"><span>Poder geral</span>${pickButton({ path: 'agePower', pool: 'geral', title: 'Poder geral (Já Vi Coisas)', item: idx.powers.find(p => p.uuid === cr.agePower) })}</div>`;
   }
   if (age.complications) {
-    const chosen = cr.ageComps ?? [];
-    html += `<p class="t20tk-bz-note">Escolha <b>${age.complications}</b> complicação(ões) de idade (Heróis de Arton, p. 290):</p><div class="t20tk-cr-grid">${Array.from({ length: age.complications }, (_, i) => {
-      const opts = AGE_COMPLICATIONS.map(c => ({ value: c.name, label: c.name, disabled: chosen.includes(c.name) && chosen[i] !== c.name }));
-      const cur = AGE_COMPLICATIONS.find(c => c.name === chosen[i]);
-      return `<label class="t20tk-pl-field">Complicação ${i + 1} ${sel(`ageComps.${i}`, opts, chosen[i])}${cur ? `<small class="t20tk-bz-meta">${escapeHtml(cur.text)}</small>` : ''}</label>`;
-    }).join('')}</div>`;
+    const chosen = (cr.ageComps ?? []).filter(Boolean).slice(0, age.complications);
+    const full = chosen.length >= age.complications;
+    html += `<p class="t20tk-bz-note">Escolha <b>${age.complications}</b> complicação(ões) de idade (Heróis de Arton, p. 290) · ${chosen.length}/${age.complications}:</p>
+      <ul class="t20tk-wz-tiles">${AGE_COMPLICATIONS.map(c => { const on = chosen.includes(c.name); return `<li><button type="button" class="t20tk-wz-tile ${on ? 'is-on' : ''}" data-action="wzAgeComp" data-value="${escapeHtml(c.name)}" ${full && !on ? 'disabled' : ''}><b>${escapeHtml(c.name)}</b><small>${escapeHtml(c.text)}</small></button></li>`; }).join('')}</ul>`;
   }
   return html;
-}
-
-export function generalPowerOptions(idx) {
-  return idx.powers.filter(p => p.tipo === 'geral').map(p => ({ value: p.uuid, label: `${p.name}${p.subtipo ? ` (${p.subtipo})` : ''}` }));
-}
-
-export function renderComplication(cr, idx, cls) {
-  const clsKey = fold(cls?.name ?? '');
-  const general = idx.powers.filter(p => p.tipo === 'complicacao' && !p.subtipo);
-  const ofClass = idx.powers.filter(p => p.tipo === 'complicacao' && p.subtipo && p.subtipo === clsKey);
-  const groups = `<option value="">— nenhuma —</option><optgroup label="Gerais">${general.map(p => `<option value="${p.uuid}" ${cr.complication === p.uuid ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}</optgroup>${ofClass.length ? `<optgroup label="De ${escapeHtml(cls.name)}">${ofClass.map(p => `<option value="${p.uuid}" ${cr.complication === p.uuid ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}</optgroup>` : ''}`;
-  let html = `<p class="t20tk-bz-note">Opcional (Heróis de Arton, p. 282): uma complicação geral ou da sua classe; em troca, um poder geral extra (cumprindo os pré-requisitos).</p>
-    <label class="t20tk-pl-field">Complicação <select name="complication">${groups}</select></label>`;
-  const chosen = idx.powers.find(p => p.uuid === cr.complication);
-  if (chosen) {
-    const text = String(chosen.description ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    if (text) html += `<p class="t20tk-bz-note">${escapeHtml(text.slice(0, 360))}${text.length > 360 ? '…' : ''}</p>`;
-    html += `<label class="t20tk-pl-field">Poder geral extra ${sel('complicationPower', generalPowerOptions(idx), cr.complicationPower)}</label>`;
-    if (chosen.subtipo) html += '<p class="t20tk-bz-note">Complicação de classe: o poder só vale enquanto pelo menos metade dos seus níveis forem nessa classe.</p>';
-  }
-  return html;
-}
-
-function renderOriginSlot(idx, cr, labels, k, total, age) {
-  const P = slotPaths(k);
-  const S = originSlot(cr, k);
-  const taken = new Set([0, 1, 2].filter(j => j !== k).map(j => originSlot(cr, j).origin).filter(Boolean));
-  const origin = ORIGINS.find(o => o.name === S.origin);
-  const groups = [...new Set(ORIGINS.map(o => o.source))].map(src => `<optgroup label="${escapeHtml(src)}">${ORIGINS.filter(o => o.source === src).map(o => `<option value="${escapeHtml(o.name)}" ${S.origin === o.name ? 'selected' : ''} ${taken.has(o.name) ? 'disabled' : ''}>${escapeHtml(o.name)}</option>`).join('')}</optgroup>`).join('');
-  let html = `<div class="t20tk-origin-slot">${total > 1 ? `<p class="t20tk-eyebrow">Origem ${k + 1}</p>` : ''}<label class="t20tk-pl-field">Origem <select name="${P.origin}" data-origin-slot="${k}"><option value="">— escolha —</option>${groups}</select></label>`;
-  if (origin?.fixed) {
-    const power = idx.powers.find(x => x.tipo === 'origem' && x.key === fold(origin.fixed.power));
-    const craft = origin.fixed.skills.some(sk => skillKeyFor(sk, labels).anyCraft) ? ` ${craftSelect(P.craft, S.craft, labels)}` : '';
-    html += `${renderOriginItems(idx, origin.name, S, P)}
-      <p class="t20tk-bz-note">Origem especial de ${escapeHtml(origin.source)}: o benefício é fixo, sem escolha de 2.</p>
-      <ul class="t20tk-pl-gains"><li data-kind="power"><b>${escapeHtml(origin.fixed.power)}</b> <span class="t20tk-bz-meta">${power ? 'poder de origem, vai para a ficha' : 'não está no compêndio: adicione pela ficha'}</span></li>
-      ${origin.fixed.skills.length ? `<li data-kind="ability"><b>Treinado em:</b> ${origin.fixed.skills.map(escapeHtml).join(', ')}${craft}<span class="t20tk-bz-meta"> · se já for treinado, escolha outra perícia de classe</span></li>` : ''}</ul>`;
-  } else if (origin) {
-    const need = Math.min(2, age.originBenefits ?? 2);
-    const picks = new Set(S.picks);
-    const full = picks.size >= need;
-    const box = (value, label, extra = '') => `<label class="t20tk-cr-check"><input type="checkbox" name="${P.picks}" data-pick-list="${P.picks}" value="${escapeHtml(value)}" ${picks.has(value) ? 'checked' : ''} ${full && !picks.has(value) ? 'disabled' : ''}> ${escapeHtml(label)}${extra}</label>`;
-    const skillBoxes = origin.skills.map(s => box(`skill:${s}`, s, skillKeyFor(s, labels).anyCraft && picks.has(`skill:${s}`) ? ` ${craftSelect(P.craft, S.craft, labels)}` : '')).join('');
-    const powerBoxes = origin.powers.map(p => {
-      if (/^um poder/i.test(p)) {
-        const kind = /tormenta/i.test(p) ? 'tormenta' : 'combate';
-        const opts = idx.powers.filter(x => x.tipo === 'geral' && fold(x.subtipo) === kind).map(x => ({ value: x.uuid, label: x.name }));
-        return box(`generic:${p}`, p, picks.has(`generic:${p}`) ? ` ${sel(P.choice, opts, S.choice)}` : '');
-      }
-      const found = idx.powers.find(x => x.key === fold(p));
-      return found ? box(`power:${found.uuid}`, p) : `<span class="t20tk-bz-meta">${escapeHtml(p)} (não está no compêndio)</span>`;
-    }).join('');
-    html += `${renderOriginItems(idx, origin.name, S, P)}
-      ${origin.special ? `<p class="t20tk-bz-warn">${escapeHtml(origin.special)}</p>` : ''}
-      <p class="t20tk-bz-note">Escolha <b>${need}</b> benefício${need > 1 ? 's' : ''} (${picks.size}/${need})${need < 2 ? ' — Origem em Construção' : ''}:</p>
-      <div class="t20tk-cr-grid"><div><b>Perícias</b>${skillBoxes}</div><div><b>Poderes</b>${powerBoxes}</div></div>`;
-  }
-  return `${html}</div>`;
 }
 
 /** Opções de uma escolha de item de origem: itens nomeados e/ou armas do compêndio. */
@@ -450,7 +401,7 @@ export function renderOriginItems(idx, originName, S, P) {
   const gear = idx.gear ?? [];
   const rows = list.map((e, i) => {
     const id = `i${i}`;
-    if (e.choose || e.weapon) return `<li>${escapeHtml(e.label ?? '')}: ${sel(`${P.items}.${id}`, originChoiceOptions(gear, e), S.items?.[id])}</li>`;
+    if (e.choose || e.weapon) return `<li>${escapeHtml(e.label ?? '')}: ${chipField(`${P.items}.${id}`, originChoiceOptions(gear, e), S.items?.[id])}</li>`;
     if (e.money) return `<li>${escapeHtml(e.label ?? `T$ ${e.money}`)} <span class="t20tk-bz-meta">rolado ao criar</span></li>`;
     if (e.note) return `<li>${escapeHtml(e.note)} <span class="t20tk-bz-meta">sem item no compêndio: combine com o mestre</span></li>`;
     const g = findGear(gear, e.item);
@@ -459,8 +410,9 @@ export function renderOriginItems(idx, originName, S, P) {
   return `<p class="t20tk-bz-note"><b>Itens de origem</b> (vão para o inventário):</p><ul class="t20tk-pl-gains">${rows}</ul>`;
 }
 
-export function craftSelect(name, current, labels) {
-  return `<select name="${name}">${CORE_CRAFTS.map(k => `<option value="${k}" ${current === k ? 'selected' : ''}>${escapeHtml(labels[k] ?? k)}</option>`).join('')}</select>`;
+/** Ofício do livro básico para "Ofício" sem especificar (chips, não menu). */
+export function craftChips(name, current, labels) {
+  return chipField(name, CORE_CRAFTS.map(k => ({ value: k, label: (labels[k] ?? k).replace(/^Of[íi]cio:\s*/i, '') })), current);
 }
 
 /** Raça e classe escolhidas na criação, no formato de devotionCheck. */
@@ -671,6 +623,7 @@ export async function applyCreation(app) {
         if (!pick.value) continue;
         const isPower = slot.kind === 'power' || ((slot.kind === 'skillOrPower' || slot.kind === 'bonusOrPower') && pick.mode === 'power');
         if (isPower) await createFrom(pick.value);
+        else if (slot.kind === 'spell' && slot.asNote) raceNotes.push(`${c.name}: ${(await fromUuid(pick.value))?.name ?? pick.value}`);
         else if (slot.kind === 'spell') await createFrom(pick.value, { flags: { [MODULE_ID]: { learnedBy: 'raca' } } });
         else if (slot.kind === 'note' || slot.kind === 'bonusOrPower') raceNotes.push(`${c.name}: ${slot.label ?? '+2 em'} ${labelsR[pick.value] ?? pick.value}`);
       }
