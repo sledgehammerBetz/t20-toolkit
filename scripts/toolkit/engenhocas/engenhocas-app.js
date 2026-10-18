@@ -13,7 +13,7 @@ import { spellFilterPanel, bindSpellFilterPanel, viaTags } from '../ui/spell-fil
 import { toolFrame, onNavigate, switchTheme } from '../ui/frame.js';
 import { metric, pill } from '../ui/components.js';
 import { APARATOS, APARATO_BY_ID, CRAFTABLE_TYPES, craftCheck, activationDC, aparatoBlocker, engenhocaState } from './engenhocas-rules.js';
-import { actorInventor, actorEngenhocas, craftEngenhoca, activateEngenhoca, repairEngenhoca, newDay, newScene, dismantleEngenhoca, installAparato, removeAparato, couplingArmors, automatoUsed, coupleEngenhoca, uncoupleEngenhoca, syncEngenhocas } from './engenhocas-actions.js';
+import { actorInventor, actorEngenhocas, craftEngenhoca, activateEngenhoca, repairEngenhoca, newDay, newScene, dismantleEngenhoca, installAparato, removeAparato, couplingArmors, automatoUsed, coupleEngenhoca, uncoupleEngenhoca, syncEngenhocas, activationSubstitutes } from './engenhocas-actions.js';
 import { COUPLE_PRICE, coupleBlocker } from './engenhocas-rules.js';
 
 const ApplicationV2 = globalThis.foundry?.applications?.api?.ApplicationV2 ?? class {};
@@ -147,7 +147,8 @@ export class EngenhocasApp extends ApplicationV2 {
     if (!inv.skillTrained) warns.push('Ofício (engenhoqueiro) não está treinado.');
     const n = this.items().length;
     const pm = this.actor.system?.attributes?.pm ?? {};
-    const powers = [['chutes', 'Chutes e Palavrões'], ['potente', 'Invenção Potente'], ['maestria', 'Maestria em Perícia'], ['manutencao', 'Manutenção Eficiente'], ['personalizado', 'Aparato Personalizado'], ['mecanizada', 'Armadura Mecanizada'], ['avancada', 'Armadura Avançada'], ['automatoEng', 'Autômato Engenhocado'], ['calibrar', 'Forçar a Calibragem'], ['rapida', 'Ativação Rápida'], ['goblinoide', 'Engenhocaria Goblinoide']].filter(([k]) => inv[k]).map(([, l]) => l);
+    const powers = [['chutes', 'Chutes e Palavrões'], ['potente', 'Invenção Potente'], ['maestria', 'Maestria em Perícia'], ['manutencao', 'Manutenção Eficiente'], ['personalizado', 'Aparato Personalizado'], ['mecanizada', 'Armadura Mecanizada'], ['avancada', 'Armadura Avançada'], ['automatoEng', 'Autômato Engenhocado'], ['calibrar', 'Forçar a Calibragem'], ['rapida', 'Ativação Rápida'], ['goblinoide', 'Engenhocaria Goblinoide']].filter(([k]) => inv[k]).map(([, l]) => l)
+    for (const sub of activationSubstitutes(this.actor)) if (!powers.includes(sub.source)) powers.push(`${sub.source} (ativa com ${sub.label})`);
     return `<section class="t20tk-eng-status">
       <div class="t20tk-metrics">
         ${metric('Círculo máximo', inv.maxCircle ? `${inv.maxCircle}º` : '—')}

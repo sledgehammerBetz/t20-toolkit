@@ -9,17 +9,19 @@
  */
 
 const foldTxt = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+/** Nome de perícia comparável: "Ofício: Artesão" e "Ofício (artesão)" viram "oficio artesao". */
+const skillTxt = s => foldTxt(s).replace(/[():]/g, ' ').replace(/\s+/g, ' ').trim();
 
 /**
  * Poderes da ficha que deixam usar outra perícia no lugar da perícia do teste (lido do texto do poder).
  * `powers`: [{ name, description }]; `skills`: [{ key, label }].
- * `key`: a perícia do teste; `pattern`: trecho de regex que casa o nome dela no texto (ex.: 'engana[cç][aã]o').
+ * `key`: a perícia do teste; `pattern`: trecho de regex que casa o nome dela no texto (ex.: 'engana[cç][aã]o'; pode ter alternativas com |).
  * Devolve [{ key, label, source }].
  */
 export function skillSubstitutes(powers = [], skills = [], { key, pattern }) {
   const res = [
-    new RegExp(`(?:usar|use|utilizar|utiliza|usa)\\s+(?:a\\s+per[ií]cia\\s+)?([^.;:,]+?)\\s+(?:no lugar de|em vez de|ao inv[eé]s de)\\s+(?:testes?\\s+de\\s+)?${pattern}`, 'i'),
-    new RegExp(`substitu\\w*\\s+(?:o\\s+|seus?\\s+)?(?:testes?\\s+de\\s+)?${pattern}\\s+por\\s+(?:um\\s+teste\\s+de\\s+)?([^.;:,]+)`, 'i')
+    new RegExp(`(?:usar|use|utilizar|utiliza|usa)\\s+(?:a\\s+per[ií]cia\\s+)?([^.;:,]+?)\\s+(?:no lugar de|em vez de|ao inv[eé]s de)\\s+(?:testes?\\s+de\\s+)?(?:${pattern})`, 'i'),
+    new RegExp(`substitu\\w*\\s+(?:o\\s+|seus?\\s+)?(?:testes?\\s+de\\s+)?(?:${pattern})\\s+por\\s+(?:um\\s+teste\\s+de\\s+)?([^.;:,]+)`, 'i')
   ];
   const out = [];
   for (const p of powers) {
@@ -27,8 +29,8 @@ export function skillSubstitutes(powers = [], skills = [], { key, pattern }) {
     for (const re of res) {
       const m = text.match(re);
       if (!m) continue;
-      const said = foldTxt(m[1]);
-      const skill = skills.filter(s => s.key !== key && said.includes(foldTxt(s.label))).sort((a, b) => b.label.length - a.label.length)[0];
+      const said = skillTxt(m[1]);
+      const skill = skills.filter(s => s.key !== key && said.includes(skillTxt(s.label))).sort((a, b) => b.label.length - a.label.length)[0];
       if (skill && !out.some(o => o.key === skill.key && o.source === p.name)) out.push({ key: skill.key, label: skill.label, source: p.name });
     }
   }

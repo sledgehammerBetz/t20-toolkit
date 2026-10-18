@@ -156,6 +156,10 @@ function skillEffects(actor, label) {
   });
 }
 
+/** Perícias que poderes deixam usar no lugar de Ofício (engenhoqueiro), como Artesão Criativo ("qualquer outro Ofício"). */
+const ENGE_PATTERN = 'of[ií]cio\\s*[(:]?\\s*engenhoqueiro\\)?|(?:qualquer\\s+)?outro\\s+of[ií]cio';
+export const activationSubstitutes = (actor, skills = sheetSkills(actor)) => skillSubstitutes(sheetPowers(actor, SKILL_KEY), skills, { key: SKILL_KEY, pattern: ENGE_PATTERN });
+
 /** Armadura em que a engenhoca está acoplada (ou null). */
 const coupledArmor = (actor, st) => (st.coupled?.kind === 'armor' ? actor.items.get(st.coupled.id) ?? null : null);
 
@@ -166,7 +170,7 @@ const coupledArmor = (actor, st) => (st.coupled?.kind === 'armor' ? actor.items.
 export function activationTest(actor, st, inv, c) {
   const skills = sheetSkills(actor);
   const enge = skills.find(s => s.key === SKILL_KEY) ?? { key: SKILL_KEY, label: 'Ofício (engenhoqueiro)', value: 0, pda: true };
-  const substitutes = skillSubstitutes(sheetPowers(actor, c.skill), skills, { key: SKILL_KEY, pattern: 'of[ií]cio\\s*[(:]?\\s*engenhoqueiro\\)?' });
+  const substitutes = activationSubstitutes(actor, skills);
   const skill = skills.find(s => s.key === c.skill && (s.key === SKILL_KEY || substitutes.some(x => x.key === s.key))) ?? enge;
   const effects = skillEffects(actor, skill.label);
   const texts = textBonuses(sheetPowers(actor, skill.key), skill.key === SKILL_KEY ? 'engenhoqueiro' : skill.label);
