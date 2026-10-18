@@ -9,6 +9,7 @@ import { MODULE_ID } from '../../constants.js';
 import { SPELL_TYPES, SPELL_SCHOOLS, CIRCLES, fold, escapeHtml, actorClasses, arcanistPaths, actorSpells } from '../core/t20.js';
 import { buildCasterProfiles, evaluateSpell, learningCapacity, necromancerRatioOk, CASTER_CLASSES } from '../core/caster-rules.js';
 import { getSpellCatalog } from '../core/spells/spell-catalog.js';
+import { refreshCompendiumIndex } from '../core/spell-index.js';
 import { filterSpells, filterOptions, EMPTY_FILTERS } from '../core/spells/spell-filter.js';
 import { spellFilterPanel, bindSpellFilterPanel, viaTags } from '../ui/spell-filter-panel.js';
 import { toolFrame, onNavigate, switchTheme, reopen } from '../ui/frame.js';
@@ -205,7 +206,8 @@ export class BuscadorApp extends ApplicationV2 {
     const st = this.filters;
     const maxCircle = Math.max(0, ...(this.ctx?.profiles ?? []).map(p => p.maxCircle ?? 0));
     const extra = `${this.actor ? `<label class="t20tk-bz-check"><input type="checkbox" data-filter="onlyAllowed" ${st.onlyAllowed ? 'checked' : ''}> Só o que posso aprender</label>` : ''}
-      <label class="t20tk-bz-check"><input type="checkbox" data-filter="hideOwned" ${st.hideOwned ? 'checked' : ''}> Ocultar as que já tenho</label>`;
+      <label class="t20tk-bz-check"><input type="checkbox" data-filter="hideOwned" ${st.hideOwned ? 'checked' : ''}> Ocultar as que já tenho</label>
+      <button type="button" class="t20tk-ui-button" data-action="reload" title="Baixa os compêndios de novo do servidor (use se o mestre mudou algum compêndio)">Recarregar compêndios</button>`;
     return spellFilterPanel(st, this.sfOptions, { count: this.#countText(), maxCircle: this.actor && st.onlyAllowed ? maxCircle : 0, extra, packs: this.index.packs })
       + (this.filterError ? `<p class="t20tk-bz-warn t20tk-sf-error">${escapeHtml(this.filterError)}</p>` : '');
   }
@@ -375,9 +377,11 @@ export class BuscadorApp extends ApplicationV2 {
     await switchTheme(target.dataset.themeValue);
   }
 
-  static async #onReload() {
-    this.index = await getSpellCatalog({ refresh: true });
+  static async #onReload(event, target) {
+    if (target) target.disabled = true;
+    [this.index] = await Promise.all([getSpellCatalog({ refresh: true }), refreshCompendiumIndex()]);
     this.sfOptions = filterOptions(this.index.spells, this.index.packs);
+    ui.notifications.info('Compêndios recarregados. Outras janelas do Toolkit já abertas veem a mudança quando forem reabertas.');
     this.render();
   }
 

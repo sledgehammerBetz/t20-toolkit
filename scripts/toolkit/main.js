@@ -8,7 +8,8 @@ import { openRegras, RegrasApp } from './regras/regras-app.js';
 import { registerTableRulesSetting, getTableRules } from './core/table-rules.js';
 import { registerCastingGuardSetting, installCastingGuard } from './grimorio/casting-guard.js';
 import { openBuscador, casterContext } from './buscador/buscador-app.js';
-import { getSpellIndex, invalidateSpellIndex } from './core/spell-index.js';
+import { getSpellIndex, refreshCompendiumIndex } from './core/spell-index.js';
+import { getSpellCatalog } from './core/spells/spell-catalog.js';
 import { installToolkitSheetButton } from './sheet-button.js';
 import { openEngenhocas } from './engenhocas/engenhocas-app.js';
 import { activateEngenhoca, actorEngenhocas } from './engenhocas/engenhocas-actions.js';
@@ -119,7 +120,7 @@ if (globalThis.Hooks?.once) {
       grimorio:Object.freeze({open:openGrimorio,read:readGrimorio}),
       escriba:Object.freeze({open:openEscriba}),
       usurpador:Object.freeze({open:openUsurpador}),
-      buscador:Object.freeze({open:openBuscador,profiles:actor=>casterContext(actor),index:getSpellIndex,invalidate:invalidateSpellIndex}),
+      buscador:Object.freeze({open:openBuscador,profiles:actor=>casterContext(actor),index:getSpellIndex,invalidate:()=>Promise.all([getSpellCatalog({refresh:true}),refreshCompendiumIndex()])}),
       report:openReport,
       diagnostics:(o={})=>diagnostics(o),
       errors:errorLog,

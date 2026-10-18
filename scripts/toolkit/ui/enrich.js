@@ -12,14 +12,15 @@ let journalPacks = null;
 async function journalPackMap(gameRef = globalThis.game) {
   if (journalPacks) return journalPacks;
   const map = new Map();
-  for (const pack of [...(gameRef?.packs ?? [])].filter(p => p.documentName === 'JournalEntry')) {
-    try {
-      const index = pack.index?.size ? pack.index : await pack.getIndex();
-      for (const e of index) if (!map.has(e._id)) map.set(e._id, pack.collection);
-    } catch (error) {
+  const packs = [...(gameRef?.packs ?? [])].filter(p => p.documentName === 'JournalEntry');
+  const indexes = await Promise.all(packs.map(async pack => {
+    try { return pack.index?.size ? pack.index : await pack.getIndex(); } catch (error) {
       console.warn(`[T20 Toolkit] Não foi possível ler o diário ${pack.collection}:`, error);
+      return [];
     }
-  }
+  }));
+  // Mesma ordem de antes: o primeiro compêndio que tiver o diário vence.
+  packs.forEach((pack, i) => { for (const e of indexes[i]) if (!map.has(e._id)) map.set(e._id, pack.collection); });
   journalPacks = map;
   return map;
 }

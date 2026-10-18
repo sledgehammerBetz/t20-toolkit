@@ -85,10 +85,8 @@ export class UsurpadorApp extends ApplicationV2 {
   get title() { return this.actor ? `Usurpador — ${this.actor.name}` : 'Usurpador'; }
 
   async _prepareContext() {
-    this.index ??= await getSpellIndex();
-    this.catalog ??= await getSpellCatalog();
+    if (!this.index || !this.catalog || !this.powers) [this.index, this.catalog, this.powers] = await Promise.all([getSpellIndex(), getSpellCatalog(), getGrantedPowerIndex()]);
     this.sfOptions ??= filterOptions(this.catalog.spells.filter(s => ['div', 'uni'].includes(s.type)), this.catalog.packs);
-    this.powers ??= await getGrantedPowerIndex();
     const actor = this.actor;
     const profile = buildCasterProfiles({ classes: actorClasses(actor) }).find(p => p.id === 'usurpador') ?? null;
     const state = actor?.getFlag?.(MODULE_ID, 'usurpador') ?? {};

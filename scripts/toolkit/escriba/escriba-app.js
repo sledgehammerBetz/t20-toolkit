@@ -46,8 +46,7 @@ export class EscribaApp extends ApplicationV2 {
   get title() { return this.actor ? `Escriba Arcano — ${this.actor.name}` : 'Escriba Arcano'; }
 
   async _prepareContext() {
-    this.index ??= await getSpellIndex();
-    this.catalog ??= await getSpellCatalog();
+    if (!this.index || !this.catalog) [this.index, this.catalog] = await Promise.all([getSpellIndex(), getSpellCatalog()]);
     this.sfOptions ??= filterOptions(this.catalog.spells.filter(s => ['arc', 'uni'].includes(s.type)), this.catalog.packs);
     const actor = this.actor;
     const classes = actorClasses(actor);
