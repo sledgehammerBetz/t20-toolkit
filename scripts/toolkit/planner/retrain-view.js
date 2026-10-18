@@ -173,14 +173,13 @@ export const RETRAIN_ACTIONS = {
       foundry.utils.setProperty(data, `flags.${MODULE_ID}.retrainedFrom`, old.name);
       const [item] = await actor.createEmbeddedDocuments('Item', [data]);
       const oldId = old.id, oldName = old.name;
-      await old.delete();
       const c = this.ctxData;
       const hLevel = Object.entries(c.history).find(([, x]) => (x.created ?? []).includes(oldId))?.[0];
       const patch = {};
       if (hLevel) patch[`flags.${MODULE_ID}.history.${hLevel}.created`] = c.history[hLevel].created.map(id => (id === oldId ? item.id : id));
       if (st.mode === 'levelUp' && !game.user?.isGM) patch[`flags.${MODULE_ID}.retrain.usedAt`] = c.current;
       patch[`flags.${MODULE_ID}.retrains`] = [...(actor.getFlag(MODULE_ID, 'retrains') ?? []), { level, from: oldName, to: item.name, by: game.user?.name ?? '', at: c.current }];
-      await actor.update(patch);
+      await Promise.all([old.delete(), actor.update(patch)]);
       this.browse = null;
       await postCard(actor, { tool: 'planner', tone: 'success', title: 'Retreino', subtitle: `${actor.name} · ${level}º nível`, rows: [['Saiu', oldName], ['Entrou', item.name]], note: deps.length ? `Confira: ${deps.join(', ')} dependia de ${oldName}.` : '' });
       this.render();

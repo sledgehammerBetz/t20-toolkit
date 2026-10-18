@@ -204,12 +204,11 @@ export class GrimorioApp extends ApplicationV2 {
       .filter(s => s.prepared !== chosen.has(s.id))
       .map(s => ({ _id: s.id, 'system.preparada': chosen.has(s.id) }));
     try {
-      if (updates.length) await actor.updateEmbeddedDocuments('Item', updates);
       const flagUpdate = {
         [`flags.${MODULE_ID}.grimorio`]: { lastStudyDay: c.day, lastStudyTime: game.time.worldTime, memorized: selectedIds }
       };
       if (!actor.getFlag('tormenta20', 'mago')) flagUpdate['flags.tormenta20.mago'] = true; // liga o sol de "preparada" na ficha
-      await actor.update(flagUpdate);
+      await Promise.all([updates.length ? actor.updateEmbeddedDocuments('Item', updates) : null, actor.update(flagUpdate)]);
       this.pending = null;
       const advance = this.element.querySelector('input[name="advanceTime"]')?.checked;
       if (advance && game.user.isGM) await game.time.advance(3600);

@@ -206,8 +206,7 @@ export class EscribaApp extends ApplicationV2 {
       const data = game.items.fromCompendium(doc);
       foundry.utils.setProperty(data, `flags.${MODULE_ID}.learnedBy`, 'escriba');
       foundry.utils.setProperty(data, `flags.${MODULE_ID}.learnedFrom`, target.dataset.scroll ? 'pergaminho' : 'grimorio');
-      await actor.createEmbeddedDocuments('Item', [data]);
-      if (choice.pay && enough) await actor.update({ 'system.dinheiro.tp': c.gold - cost.tibares });
+      await Promise.all([actor.createEmbeddedDocuments('Item', [data]), choice.pay && enough ? actor.update({ 'system.dinheiro.tp': c.gold - cost.tibares }) : null]);
       if (choice.advance && gm) await game.time.advance(cost.days * 86400);
       await postCard(actor, {
         tool: 'escriba', tone: 'success', title: `${spell.name} copiada`, subtitle: `${actor.name} · ${target.dataset.scroll ? 'de um pergaminho' : 'de um grimório'}`,

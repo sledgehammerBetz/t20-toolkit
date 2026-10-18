@@ -270,13 +270,14 @@ export class PlannerApp extends ApplicationV2 {
     const KIND = { geral: 'Poder geral', classe: 'Poder de classe', concedido: 'Poder concedido', distincao: 'Poder de distinção', pericia: 'Perícia treinada', atributo: '+1 em atributo' };
     const level = actorClasses(actor).reduce((s, c) => s + c.level, 0);
     let entry = null;
+    const update = {};
     if (x.type === 'pericia') {
       const label = skillLabels()[x.value] ?? x.value;
-      await actor.update({ [`system.pericias.${x.value}.treinado`]: true });
+      update[`system.pericias.${x.value}.treinado`] = true;
       entry = { type: 'pericia', key: x.value, label };
     } else if (x.type === 'atributo') {
       const cur = Number(actor.system?.atributos?.[x.value]?.base) || 0;
-      await actor.update({ [`system.atributos.${x.value}.base`]: cur + 1 });
+      update[`system.atributos.${x.value}.base`] = cur + 1;
       entry = { type: 'atributo', key: x.value, label: `+1 em ${x.value.toUpperCase()}` };
     } else {
       const doc = await fromUuid(x.value);
@@ -288,7 +289,7 @@ export class PlannerApp extends ApplicationV2 {
     }
     entry = { ...entry, kindLabel: KIND[x.type], reason, level, by: game.user?.name ?? '' };
     const list = [...(actor.getFlag(MODULE_ID, 'extraGains') ?? []), entry];
-    await actor.setFlag(MODULE_ID, 'extraGains', list);
+    await actor.update({ ...update, [`flags.${MODULE_ID}.extraGains`]: list });
     await postCard(actor, { tool: 'planner', tone: 'success', title: 'Ganho fora da progressão', subtitle: `${actor.name} · ${KIND[x.type]}`, items: [{ name: entry.label, img: entry.img }], note: reason ? `Motivo: ${reason}` : '' });
     this.extra = { type: x.type, value: '', reason: '' };
     this.render();
@@ -300,10 +301,10 @@ export class PlannerApp extends ApplicationV2 {
     const list = [...(actor.getFlag(MODULE_ID, 'extraGains') ?? [])];
     const [g] = list.splice(Number(target.dataset.index), 1);
     if (!g) return;
-    if (g.itemId) await actor.items.get(g.itemId)?.delete();
-    if (g.type === 'pericia') await actor.update({ [`system.pericias.${g.key}.treinado`]: false });
-    if (g.type === 'atributo') await actor.update({ [`system.atributos.${g.key}.base`]: (Number(actor.system?.atributos?.[g.key]?.base) || 0) - 1 });
-    await actor.setFlag(MODULE_ID, 'extraGains', list);
+    const update = { [`flags.${MODULE_ID}.extraGains`]: list };
+    if (g.type === 'pericia') update[`system.pericias.${g.key}.treinado`] = false;
+    if (g.type === 'atributo') update[`system.atributos.${g.key}.base`] = (Number(actor.system?.atributos?.[g.key]?.base) || 0) - 1;
+    await Promise.all([g.itemId ? actor.items.get(g.itemId)?.delete() : null, actor.update(update)]);
     this.render();
   }
 
@@ -353,18 +354,18 @@ export class PlannerApp extends ApplicationV2 {
       }
       summary.push(`${row.cls} ${row.classLevel}`);
       // 2) Habilidades do nível e escolhas
-      const toCreate = [];
+      const uuids = [];
       for (const gain of g.gains) {
         let uuid = null;
         if (gain.kind === 'ability' && !this.ownsPower(gain.item)) uuid = this.findAbility(row.cls, gain.item)?.uuid;
         if ((gain.kind === 'power' || gain.kind === 'path') && entry.picks?.[gain.id]) uuid = entry.picks[gain.id];
-        if (!uuid) continue;
-        const doc = await fromUuid(uuid);
-        if (!doc) continue;
+        if (uuid) uuids.push(uuid);
+      }
+      const toCreate = (await Promise.all(uuids.map(u => fromUuid(u)))).filter(Boolean).map(doc => {
         const data = game.items.fromCompendium(doc);
         foundry.utils.setProperty(data, `flags.${MODULE_ID}.plannerLevel`, level);
-        toCreate.push(data);
-      }
+        return data;
+      });
       if (toCreate.length) {
         const docs = await actor.createEmbeddedDocuments('Item', toCreate);
         created.push(...docs.map(d => d.id));
@@ -373,11 +374,11 @@ export class PlannerApp extends ApplicationV2 {
       // 3) Perícias novas pelo Aumento de Atributo (Inteligência)
       const trained = ig.picks.filter(k => !actor.system?.pericias?.[k]?.treinado);
       if (trained.length) {
-        await actor.update(Object.fromEntries(trained.map(k => [`system.pericias.${k}.treinado`, true])));
         const labels = skillLabels();
         summary.push(...trained.map(k => `Treinado em ${labels[k] ?? k}`));
       }
       await actor.update({
+        ...Object.fromEntries(trained.map(k => [`system.pericias.${k}.treinado`, true])),
         [`flags.${MODULE_ID}.history.${level}`]: { cls: row.cls, classLevel: row.classLevel, classId, classCreated, created, trained },
         [`flags.${MODULE_ID}.plan.levels.-=${level}`]: null
       });
@@ -407,20 +408,18 @@ export class PlannerApp extends ApplicationV2 {
     });
     if (!ok) return;
     if (h.creation) {
-      await undoCreation(actor, h);
-      await actor.update({ [`flags.${MODULE_ID}.history.-=${level}`]: null });
+      await undoCreation(actor, h, { [`flags.${MODULE_ID}.history.-=${level}`]: null });
       this.selected = 1;
       return;
     }
     const ids = (h.created ?? []).filter(id => actor.items.get(id));
     if (h.classCreated && actor.items.get(h.classId)) ids.push(h.classId);
-    if (ids.length) await actor.deleteEmbeddedDocuments('Item', ids);
-    if (h.trained?.length) await actor.update(Object.fromEntries(h.trained.map(k => [`system.pericias.${k}.treinado`, false])));
-    if (!h.classCreated) {
-      const cls = actor.items.get(h.classId);
-      if (cls) await cls.update({ 'system.niveis': Math.max(1, (parseInt(cls.system.niveis) || 1) - 1) });
-    }
-    await actor.update({ [`flags.${MODULE_ID}.history.-=${level}`]: null });
+    const cls = h.classCreated ? null : actor.items.get(h.classId);
+    await Promise.all([
+      ids.length ? actor.deleteEmbeddedDocuments('Item', ids) : null,
+      cls ? cls.update({ 'system.niveis': Math.max(1, (parseInt(cls.system.niveis) || 1) - 1) }) : null,
+      actor.update({ ...Object.fromEntries((h.trained ?? []).map(k => [`system.pericias.${k}.treinado`, false])), [`flags.${MODULE_ID}.history.-=${level}`]: null })
+    ]);
     this.selected = level;
   }
 

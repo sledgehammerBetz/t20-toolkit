@@ -163,7 +163,11 @@ export class UsurpadorApp extends ApplicationV2 {
   #zero(dc, setup) { return !!this.test.zero && this.#canZero(dc, setup); }
 
   async #saveTest() {
-    if (this.actor?.isOwner) await this.actor.setFlag(MODULE_ID, TEST_FLAG, foundry.utils.deepClone(this.test));
+    if (!this.actor?.isOwner) return;
+    // Só grava se mudou: cada gravação vai para todos os conectados.
+    const saved = this.actor.getFlag(MODULE_ID, TEST_FLAG);
+    if (saved && foundry.utils.objectsEqual(saved, this.test)) return;
+    await this.actor.setFlag(MODULE_ID, TEST_FLAG, foundry.utils.deepClone(this.test));
   }
 
   /** Rola o teste montado (ou escolhe 0) e posta no chat. */
@@ -404,8 +408,14 @@ export class UsurpadorApp extends ApplicationV2 {
 
   /** Substitui (não mescla) o registro do poder capturado. */
   async #saveCapture(capture) {
-    await this.actor.unsetFlag(MODULE_ID, 'usurpador');
-    if (capture) await this.actor.setFlag(MODULE_ID, 'usurpador', { capture });
+    if (!capture) return this.actor.unsetFlag(MODULE_ID, 'usurpador');
+    // Uma gravação só: os campos novos e a remoção dos que saíram (em vez de apagar tudo e gravar de novo).
+    const base = `flags.${MODULE_ID}.usurpador`;
+    const old = this.actor.getFlag(MODULE_ID, 'usurpador') ?? {};
+    const update = { [`${base}.capture`]: capture };
+    for (const key of Object.keys(old)) if (key !== 'capture') update[`${base}.-=${key}`] = null;
+    for (const key of Object.keys(old.capture ?? {})) if (!(key in capture)) update[`${base}.capture.-=${key}`] = null;
+    return this.actor.update(update);
   }
 
   /** Aprimoramentos da magia (os da própria magia e os da ficha que valem para ela), como o sistema os lista. */
