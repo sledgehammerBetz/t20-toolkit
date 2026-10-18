@@ -151,7 +151,7 @@ export const RETRAIN_ACTIONS = {
     const st = retrainState(this);
     if (!actor?.isOwner || !st.allowed) return;
     const old = actor.items.get(target.dataset.gain);
-    const ref = this.index.powers.find(p => p.uuid === target.dataset.value);
+    const ref = this.index.powerByUuid.get(target.dataset.value);
     if (!old || !ref) return;
     const level = this.selected;
     const deps = dependentsOf(actor.items, old.name);

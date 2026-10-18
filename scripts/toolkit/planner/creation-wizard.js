@@ -164,7 +164,7 @@ function stepRaceChoices(app, cr, rules, info) {
       const p = picks[c.key]?.[i] ?? {};
       const base = `data-ability="${c.key}" data-slot="${i}"`;
       const path = `raceChoices.${c.key}.${i}.value`;
-      const powerSel = group => pickButton({ path, pool: group, title: `${c.name}: escolher poder`, item: idx.powers.find(x => x.uuid === p.value) });
+      const powerSel = group => pickButton({ path, pool: group, title: `${c.name}: escolher poder`, item: idx.powerByUuid.get(p.value) });
       const skillChips = list => chips('wzChoice', list.map(([k, l]) => ({ value: k, label: l })), p.value, base);
       const mode = (a, b) => `<div class="t20tk-wz-seg">${[['skill', a], ['power', b]].map(([m, l]) => `<button type="button" data-action="wzChoiceMode" ${base} data-value="${m}" aria-pressed="${(p.mode ?? 'skill') === m}">${l}</button>`).join('')}</div>`;
       switch (slot.kind) {
@@ -250,7 +250,7 @@ function stepOrigin(app, cr, rules, info) {
       const craftNeeded = [...picks].some(x => /^skill:of[íi]cio$/i.test(x.trim()));
       const generic = [...picks].find(x => x.startsWith('generic:'));
       const genericSel = generic
-        ? `<div class="t20tk-wz-row"><span>${escapeHtml(generic.slice(8))}</span>${pickButton({ path: P.choice, pool: /tormenta/i.test(generic) ? 'tormenta' : 'combate', title: `${origin.name}: ${generic.slice(8)}`, item: idx.powers.find(x => x.uuid === S.choice) })}</div>`
+        ? `<div class="t20tk-wz-row"><span>${escapeHtml(generic.slice(8))}</span>${pickButton({ path: P.choice, pool: /tormenta/i.test(generic) ? 'tormenta' : 'combate', title: `${origin.name}: ${generic.slice(8)}`, item: idx.powerByUuid.get(S.choice) })}</div>`
         : '';
       detail = `${origin.special ? `<p class="t20tk-bz-warn">${escapeHtml(origin.special)}</p>` : ''}
         <p class="t20tk-bz-note">Escolha <b>${need}</b> benefício${need > 1 ? 's' : ''} (${picks.size}/${need}).</p>
@@ -363,8 +363,8 @@ function stepComplication(app, cr) {
   const w = wizardState(app);
   const cls = idx.classes.find(c => c.uuid === cr.cls);
   const clsKey = fold(cls?.name ?? '');
-  const comp = idx.powers.find(p => p.uuid === cr.complication);
-  const power = idx.powers.find(p => p.uuid === cr.complicationPower);
+  const comp = idx.powerByUuid.get(cr.complication);
+  const power = idx.powerByUuid.get(cr.complicationPower);
   const tab = comp && w.compTab === 'power' ? 'power' : 'comp';
   const text = p => strip(p.description).replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, '$1');
   const found = (kind, p) => { const q = fold(w.q[kind] ?? ''); return !q || p.key.includes(q) || fold(text(p)).includes(q); };
@@ -445,7 +445,7 @@ function stepSummary(app, cr, rules, info, issues) {
   const skills = sk ? [...sk.plan.tiles.filter(t => t.lockedBy || t.pickedBy).map(t => t.label)] : [];
   const slots = originSlots(cr, rules, info.noOrigin);
   const age = ageFor(cr, rules);
-  const pw = u => idx.powers.find(p => p.uuid === u)?.name;
+  const pw = u => idx.powerByUuid.get(u)?.name;
   const fromChoices = info.choices.flatMap(c => c.slots.map((slot, i) => { const v = cr.raceChoices?.[c.key]?.[i] ?? {}; const isP = slot.kind === 'power' || (['skillOrPower', 'bonusOrPower'].includes(slot.kind) && v.mode === 'power'); return isP ? pw(v.value) : slot.kind === 'spell' ? (w.spells ?? []).find(x => x.uuid === v.value)?.name : null; })).filter(Boolean);
   const powers = [pw(cr.path), ...info.poolChosen.map(p => p.name), ...fromChoices, cr.godPower && pw(cr.godPower), cr.complication && pw(cr.complication), cr.complicationPower && pw(cr.complicationPower)].filter(Boolean);
   const row = (k, v) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v || '—')}</dd></div>`;

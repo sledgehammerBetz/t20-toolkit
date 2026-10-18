@@ -66,14 +66,16 @@ export class BuscadorApp extends ApplicationV2 {
     this.sfOptions ??= filterOptions(this.index.spells, this.index.packs);
     const ctx = this.actor ? casterContext(this.actor) : { classes: [], profiles: [], known: [], capacity: null };
     this.ctx = ctx;
+    this._rows = null;
     return ctx;
   }
 
   /** Status de cada magia do índice para o personagem atual. */
   rows() {
+    if (this._rows?.index === this.index) return this._rows.list;
     const ownedKeys = new Set(this.ctx.known.map(s => s.key));
     const ownedUuids = new Set(this.ctx.known.map(s => s.sourceUuid).filter(Boolean));
-    return this.index.spells.map(spell => {
+    const rows = this.index.spells.map(spell => {
       const owned = ownedUuids.has(spell.uuid) || ownedKeys.has(spell.key);
       const ev = this.actor ? evaluateSpell(spell, this.ctx.profiles) : { status: 'review', reasons: [] };
       if (this.actor && ev.status === 'allowed' && !necromancerRatioOk(this.ctx.capacity, spell)) {
@@ -82,19 +84,32 @@ export class BuscadorApp extends ApplicationV2 {
       }
       return { spell, owned, ...ev, status: owned ? 'owned' : ev.status };
     });
+    this._rows = { index: this.index, list: rows, byUuid: new Map(rows.map(r => [r.spell.uuid, r])) };
+    return rows;
   }
 
+  /** Linha de uma magia (sem percorrer a lista). */
+  row(uuid) {
+    this.rows();
+    return this._rows.byUuid.get(uuid);
+  }
+
+  /** Resultado dos filtros; o mesmo redesenho pede várias vezes (contagem, lista), então fica guardado até algo mudar. */
   filtered() {
     const st = this.filters;
     const rows = this.rows();
-    const byUuid = new Map(rows.map(r => [r.spell.uuid, r]));
+    const key = JSON.stringify({ ...st, selected: null, profileOpen: null, panel: null });
+    if (this._filtered?.rows === rows && this._filtered.key === key) return this._filtered.list;
+    const byUuid = this._rows.byUuid;
     const res = filterSpells(rows.map(r => r.spell), st);
     this.filterError = res.error || res.warning;
-    return res.results.map(({ spell, via }) => ({ ...byUuid.get(spell.uuid), via })).filter(({ status, owned }) => {
+    const list = res.results.map(({ spell, via }) => ({ ...byUuid.get(spell.uuid), via })).filter(({ status, owned }) => {
       if (st.hideOwned && owned) return false;
       if (st.onlyAllowed && this.actor && !['allowed', 'review', 'owned'].includes(status)) return false;
       return true;
     });
+    this._filtered = { rows, key, list };
+    return list;
   }
 
   /* ---------- render ---------- */
@@ -244,7 +259,7 @@ export class BuscadorApp extends ApplicationV2 {
     const d = this.details.get(uuid);
     if (!d) return `<p class="t20tk-bz-empty">Carregando…</p>`;
     if (d.error) return `<p class="t20tk-bz-warn">${escapeHtml(d.error)}</p>`;
-    const row = this.rows().find(r => r.spell.uuid === uuid);
+    const row = this.row(uuid);
     const reasons = row?.reasons?.length ? `<ul class="t20tk-bz-reasons">${row.reasons.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>` : '';
     const s = d.system;
     const metric = (k, v) => `<div class="t20tk-metric"><span>${k}</span><strong>${escapeHtml(v || '—')}</strong></div>`;
@@ -304,7 +319,7 @@ export class BuscadorApp extends ApplicationV2 {
     const uuid = target.dataset.uuid;
     const actor = this.actor;
     if (!actor?.isOwner) return ui.notifications.warn('Você não tem permissão para alterar esta ficha.');
-    const row = this.rows().find(r => r.spell.uuid === uuid);
+    const row = this.row(uuid);
     if (!row || row.status === 'owned') return;
     const isGM = game.user.isGM;
     const warnings = [];

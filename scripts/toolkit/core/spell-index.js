@@ -136,6 +136,6 @@ export async function getPlannerIndex({ refresh = false, gameRef = globalThis.ga
   classes.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   races.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   gear.sort((a, b) => (b.core - a.core) || a.name.localeCompare(b.name, 'pt-BR'));
-  plannerCache = Object.freeze({ powers: Object.freeze(powers), classes: Object.freeze(classes), races: Object.freeze(races), gear: Object.freeze(gear) });
+  plannerCache = Object.freeze({ powers: Object.freeze(powers), powerByUuid: new Map(powers.map(p => [p.uuid, p])), classes: Object.freeze(classes), races: Object.freeze(races), gear: Object.freeze(gear) });
   return plannerCache;
 }

@@ -93,7 +93,7 @@ export class PlannerApp extends ApplicationV2 {
       if (row.done || row.level > level || !row.cls) continue;
       classLevels[fold(row.cls)] = row.classLevel;
       const p = c.plan[row.level]?.picks ?? {};
-      for (const uuid of Object.values(p)) { const pw = this.index.powers.find(x => x.uuid === uuid); if (pw && row.level < level) powers.add(pw.key); }
+      for (const uuid of Object.values(p)) { const pw = this.index.powerByUuid.get(uuid); if (pw && row.level < level) powers.add(pw.key); }
       for (const g of gainsAt(row.cls, row.classLevel).gains) if (g.kind === 'ability' && row.level < level) powers.add(fold(g.item));
     }
     const skills = new Set();
@@ -115,7 +115,7 @@ export class PlannerApp extends ApplicationV2 {
     for (const row of c.timeline) {
       if (row.done || row.level >= level) continue;
       for (const uuid of Object.values(c.plan[row.level]?.picks ?? {})) {
-        const a = aumentoAttr(this.index.powers.find(x => x.uuid === uuid)?.name ?? '');
+        const a = aumentoAttr(this.index.powerByUuid.get(uuid)?.name ?? '');
         if (a) attributes[a] = (attributes[a] ?? 0) + 1;
       }
     }
@@ -331,7 +331,7 @@ export class PlannerApp extends ApplicationV2 {
     if (ig.picks.length < ig.want) missing.push(`${ig.want - ig.picks.length} perícia(s) por Inteligência`);
     const summary = [];
     const ctx = this.prereqContext(level);
-    const unmet = Object.values(entry.picks ?? {}).filter(Boolean).map(u => this.index.powers.find(p => p.uuid === u))
+    const unmet = Object.values(entry.picks ?? {}).filter(Boolean).map(u => this.index.powerByUuid.get(u))
       .filter(p => p && evaluatePrerequisites(prerequisiteText(p.description), ctx).status === 'missing');
     const ok = await foundry.applications.api.DialogV2.confirm({
       window: { title: `Aplicar ${level}º nível` },

@@ -180,7 +180,7 @@ export function otherAttributes(idx, cr, rules = getTableRules(), info = raceInf
   }
   for (const u of fxUuids(idx, cr, rules, info)) {
     const fx = FX.get(u);
-    if (fx && Object.keys(fx).length) parts.push({ label: idx.powers.find(p => p.uuid === u)?.name ?? 'Poder', attrs: fx, how: 'efeito' });
+    if (fx && Object.keys(fx).length) parts.push({ label: idx.powerByUuid.get(u)?.name ?? 'Poder', attrs: fx, how: 'efeito' });
   }
   const total = addAttrs(...parts.map(p => p.attrs));
   const toBase = addAttrs(...parts.filter(p => p.how === 'base').map(p => p.attrs));
@@ -375,7 +375,7 @@ export function renderAge(cr, rules, idx, age) {
   if (age.features?.length) html += `<ul class="t20tk-pl-gains">${age.features.map(f => `<li data-kind="note">${escapeHtml(f)}</li>`).join('')}</ul>`;
   if (rule === 'herois' && band === 'adulto') {
     html += `<label class="t20tk-cr-check"><input type="checkbox" name="adultPower" ${cr.adultPower ? 'checked' : ''}> Já Vi Coisas: receber um poder geral (e uma complicação de idade)</label>`;
-    if (cr.adultPower) html += `<div class="t20tk-wz-row"><span>Poder geral</span>${pickButton({ path: 'agePower', pool: 'geral', title: 'Poder geral (Já Vi Coisas)', item: idx.powers.find(p => p.uuid === cr.agePower) })}</div>`;
+    if (cr.adultPower) html += `<div class="t20tk-wz-row"><span>Poder geral</span>${pickButton({ path: 'agePower', pool: 'geral', title: 'Poder geral (Já Vi Coisas)', item: idx.powerByUuid.get(cr.agePower) })}</div>`;
   }
   if (age.complications) {
     const chosen = (cr.ageComps ?? []).filter(Boolean).slice(0, age.complications);
@@ -690,7 +690,7 @@ export async function applyCreation(app) {
     const god = cr.god && devotionCheck({ god: cr.god, race: dvc.race, classes: dvc.classes, rules }).level !== 'block' ? cr.god : '';
     if (origins.length) update['system.detalhes.origem'] = origins.map(o => o.origin.name).join(' / ');
     if (god) update['system.detalhes.divindade'] = god;
-    const pathName = idx.powers.find(p => p.uuid === cr.path)?.name ?? '';
+    const pathName = idx.powerByUuid.get(cr.path)?.name ?? '';
     const pathKey = PATH_KEY[fold(pathName).split(':').pop()?.trim()];
     const key = pathKey ?? KEY_BY_CLASS[cls?.key];
     if (key) update['system.attributes.conjuracao'] = key;
