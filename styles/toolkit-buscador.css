@@ -187,6 +187,34 @@
 .t20tk-us-capture { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 var(--t20-pad) 14px; display: flex; flex-direction: column; gap: 10px; }
 .t20tk-us-capture > .t20tk-bz-note { margin: 0; }
 .t20tk-bz .t20tk-us-capture .t20tk-es-list { flex: 0 0 auto; padding: 0; overflow: visible; }
+.t20tk-us-capture > .t20tk-wz-field { flex: 0 0 auto; }
+.t20tk-us-desc { list-style: none; margin: -4px 0 6px; padding: 10px 14px; border: 1px solid var(--t20-border-subtle); border-top: 0; border-radius: 0 0 var(--t20-radius) var(--t20-radius); background: var(--t20-bg-surface-alt); }
+.t20tk-us-cast { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 var(--t20-pad) 14px; display: flex; flex-direction: column; gap: 10px; }
+.t20tk-us-cast > .t20tk-bz-note, .t20tk-us-cast > .t20tk-bz-warn { margin: 0; }
+.t20tk-us-cast-head { display: flex; align-items: center; gap: 10px; }
+.t20tk-us-cast-head img { width: 44px; height: 44px; border-radius: var(--t20-radius-s); object-fit: cover; flex: 0 0 auto; }
+.t20tk-us-cast-head > span { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+.t20tk-us-cast-head small { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--t20-text-secondary); }
+.t20tk-us-cast-head b { font-size: 16px; }
+.t20tk-us-cast-head em { font-style: normal; font-size: 12px; color: var(--t20-text-secondary); }
+.t20tk-us-enhs, .t20tk-us-mods { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.t20tk-us-enh, .t20tk-us-mod { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 1px solid var(--t20-border-subtle); border-radius: var(--t20-radius); background: var(--t20-bg-surface); font-size: 12px; }
+.t20tk-us-enh.is-on, .t20tk-us-mod.is-on { border-color: var(--t20-accent); background: var(--t20-bg-selected); }
+.t20tk-us-enh > span:last-child, .t20tk-us-mod > span:last-child { flex: 1 1 auto; min-width: 0; }
+.t20tk-us-enh .t20tk-enh-cost { flex: 0 0 64px; font-weight: 700; color: var(--t20-accent); }
+.t20tk-bz .t20tk-us-enh .t20tk-chip, .t20tk-bz .t20tk-us-mod .t20tk-chip { flex: 0 0 auto; min-width: 64px; height: 26px; padding: 0 8px; font-size: 11px; }
+.t20tk-us-step { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.t20tk-bz .t20tk-us-step button { width: 26px; min-width: 0; height: 26px; min-height: 0; margin: 0; padding: 0; line-height: 1; }
+.t20tk-us-step b { min-width: 18px; text-align: center; }
+.t20tk-bz .t20tk-us-step input[type="number"] { width: 56px; height: 26px; text-align: center; }
+.t20tk-us-auto { flex: 0 0 auto; min-width: 64px; font-size: 11px; font-weight: 700; color: var(--t20-success); }
+.t20tk-us-extra { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; }
+.t20tk-us-test .t20tk-bz-meta { margin: 0; font-size: 11px; color: var(--t20-text-secondary); }
+.t20tk-us-sum { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 10px 12px; border: 2px solid var(--t20-accent); border-radius: var(--t20-radius-l); background: var(--t20-bg-surface); }
+.t20tk-us-sum > span { display: flex; flex-direction: column; }
+.t20tk-us-sum small { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--t20-text-secondary); }
+.t20tk-us-sum b { font-size: 15px; }
+.t20tk-us-sum .t20tk-ui-button { margin-left: auto; }
 
 /* ---------- Planejador ---------- */
 .t20tk-pl-timeline { list-style: none; display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; padding: 0 var(--t20-pad) 12px; }
@@ -416,7 +444,7 @@ li:has(> * .t20tk-sf-via), li:has(.t20tk-sf-via) { box-shadow: inset 3px 0 0 var
 /* ---------- conteúdo nunca fica fora da tela: a área principal rola e a lista mantém altura mínima ---------- */
 .t20tk-shell.t20tk-frame .t20tk-main { overflow-y: auto; overflow-x: hidden; }
 .t20tk-shell.t20tk-frame .t20tk-bz-body { min-height: 380px; }
-.t20tk-shell.t20tk-frame .t20tk-gr-body, .t20tk-shell.t20tk-frame .t20tk-us-capture { min-height: 260px; }
+.t20tk-shell.t20tk-frame .t20tk-gr-body, .t20tk-shell.t20tk-frame .t20tk-us-capture, .t20tk-shell.t20tk-frame .t20tk-us-cast { min-height: 260px; }
 
 /* ---------- Início: painel do personagem ---------- */
 .t20tk-home-body { display: flex; flex-direction: column; gap: 12px; padding: 0 var(--t20-pad) 16px; }

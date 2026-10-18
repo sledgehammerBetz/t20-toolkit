@@ -75,3 +75,99 @@ export function divineTheftEffect(theft, spellName, img) {
     }
   };
 }
+
+/* ---------- teste (Enganação ou o que um poder puser no lugar) ---------- */
+
+export const TEST_SKILL = 'enga';
+const foldTxt = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/**
+ * Custo final em PM como a janela de conjuração do sistema calcula: custo base + custo × vezes de cada
+ * aprimoramento marcado. Truque zera. Com algum custo, o mínimo é 1 PM.
+ * `picks`: [{ cost: '2' | '-1' | 'Truque' | '0', qty }]
+ */
+export function castCost(base, picks = []) {
+  let total = Number(base) || 0;
+  let has = total > 0;
+  for (const p of picks) {
+    const qty = Number(p.qty) || 0;
+    if (!qty) continue;
+    if (p.cost === 'Truque') return 0;
+    const c = Number(p.cost);
+    if (Number.isFinite(c) && c) { total += c * qty; has = true; }
+  }
+  return has ? Math.max(1, total) : 0;
+}
+
+/** Custo de um aprimoramento como o diálogo do sistema escreve: '' vira '0', ou 'Truque' se for da própria magia. */
+export function effectCost(flags = {}, { spell = true } = {}) {
+  const raw = flags.custo;
+  if (raw === '' || raw === undefined || raw === null) return spell && flags.self ? 'Truque' : '0';
+  return String(raw);
+}
+
+const SUB_PATTERNS = [
+  /(?:usar|use|utilizar|utiliza|usa)\s+(?:a\s+per[ií]cia\s+)?([^.;:,]+?)\s+(?:no lugar de|em vez de|ao inv[eé]s de)\s+(?:testes?\s+de\s+)?engana[cç][aã]o/i,
+  /substitu\w*\s+(?:o\s+|seus?\s+)?(?:testes?\s+de\s+)?engana[cç][aã]o\s+por\s+(?:um\s+teste\s+de\s+)?([^.;:,]+)/i
+];
+
+/**
+ * Poderes da ficha que deixam usar outra perícia no lugar de Enganação (lido do texto do poder).
+ * `powers`: [{ name, description }]; `skills`: [{ key, label }]. Devolve [{ key, label, source }].
+ */
+export function skillSubstitutes(powers = [], skills = []) {
+  const out = [];
+  for (const p of powers) {
+    const text = String(p.description ?? '');
+    for (const re of SUB_PATTERNS) {
+      const m = text.match(re);
+      if (!m) continue;
+      const said = foldTxt(m[1]);
+      const skill = skills.filter(s => s.key !== TEST_SKILL && said.includes(foldTxt(s.label))).sort((a, b) => b.label.length - a.label.length)[0];
+      if (skill && !out.some(o => o.key === skill.key && o.source === p.name)) out.push({ key: skill.key, label: skill.label, source: p.name });
+    }
+  }
+  return out;
+}
+
+/**
+ * Bônus em Enganação escritos no texto de poderes ("+2 em Enganação e Intuição").
+ * Não dá para saber se é sempre ou só em certas situações: a janela mostra para a pessoa marcar.
+ * `powers`: [{ name, description, uuid, onSheet }] (onSheet = o próprio item já soma na perícia).
+ */
+export function textBonuses(powers = [], skillLabel = 'Enganação') {
+  const want = foldTxt(skillLabel);
+  const out = [];
+  for (const p of powers) {
+    const text = String(p.description ?? '');
+    for (const m of text.matchAll(/\+\s?(\d+)\s+(?:de\s+b[oô]nus\s+)?(?:em|nos?|nas?)\s+(?:testes?\s+de\s+)?([^.;:]+)/gi)) {
+      if (!foldTxt(m[2]).includes(want)) continue;
+      out.push({ id: p.uuid ?? p.name, value: Number(m[1]), source: p.name, onSheet: !!p.onSheet, text: m[0].trim() });
+      break;
+    }
+  }
+  return out;
+}
+
+/** Partes do teste: [{ label, value }] (value número ou fórmula como '1d4'). */
+export function testParts({ skillLabel = 'Enganação', skillValue = 0, armorPenalty = 0, holySymbol = false, extras = [] } = {}) {
+  const parts = [{ label: skillLabel, value: Number(skillValue) || 0 }];
+  const pda = Math.min(0, Number(armorPenalty) || 0);
+  if (pda) parts.push({ label: 'Penalidade de armadura', value: pda });
+  if (holySymbol) parts.push({ label: 'Símbolo sagrado visível', value: -5 });
+  for (const e of extras) if (e && e.value !== 0 && e.value !== '' && e.value !== undefined) parts.push(e);
+  return parts;
+}
+
+/** Soma só a parte numérica (para a chance); dados entram na fórmula. */
+export const fixedBonus = parts => parts.reduce((s, p) => s + (typeof p.value === 'number' ? p.value : (/^[+-]?\d+$/.test(String(p.value).trim()) ? Number(p.value) : 0)), 0);
+
+export function testFormula(parts) {
+  return ['1d20', ...parts.map(p => {
+    const v = String(p.value).trim();
+    return /^-/.test(v) ? `- ${v.slice(1)}` : `+ ${v.replace(/^\+/, '')}`;
+  })].join(' ');
+}
+
+/** Chance (%) de tirar `dc` ou mais no d20 + bônus. */
+export const chanceOf = (dc, bonus) => Math.max(0, Math.min(20, 21 - (dc - bonus))) * 5;
