@@ -20,7 +20,7 @@ import { filterSpells, filterOptions, EMPTY_FILTERS } from '../core/spells/spell
 import { spellFilterPanel, bindSpellFilterPanel, viaTags } from '../ui/spell-filter-panel.js';
 import { getSpellIndex, getGrantedPowerIndex } from '../core/spell-index.js';
 import {
-  GRANTED_POWERS, POWER_ALIASES, usurpDC, captureDC, divineTheft, divineTheftEffect,
+  GRANTED_POWERS, POWER_ALIASES, usurpDC, captureDC, CAPTURE_FAIL_PM, divineTheft, divineTheftEffect,
   TEST_SKILL, castCost, effectCost, skillSubstitutes, textBonuses, testParts, fixedBonus, testFormula, chanceOf
 } from './usurpador-rules.js';
 import { today } from '../grimorio/grimorio-app.js';
@@ -136,7 +136,7 @@ export class UsurpadorApp extends ApplicationV2 {
   }
 
   /** Monta o teste com as escolhas atuais: perícia, partes, fórmula, bônus fixo e PM dos efeitos. */
-  #testSetup({ holySymbol = false } = {}) {
+  #testSetup({ holySymbol = false, usurp = false } = {}) {
     const skills = this.#skills();
     const enga = skills.find(s => s.key === TEST_SKILL) ?? { key: TEST_SKILL, label: 'Enganação', value: 0 };
     const powers = this.#sheetPowers(this.test.skill);
@@ -154,7 +154,7 @@ export class UsurpadorApp extends ApplicationV2 {
     }
     for (const t of texts) if (this.test.text[t.id] && !t.onSheet) extras.push({ label: t.source, value: t.value });
     if (this.test.extra) extras.push({ label: 'Outros', value: this.test.extra });
-    const parts = testParts({ skillLabel: skill.label, skillValue: skill.value, armorPenalty: this.ctxData.armorPenalty, holySymbol, extras });
+    const parts = testParts({ skillLabel: skill.label, skillValue: skill.value, armorPenalty: usurp ? this.ctxData.armorPenalty : 0, holySymbol: usurp && holySymbol, extras });
     return { skill, skills, substitutes, effects, texts, parts, bonus: fixedBonus(parts), fixed: parts.every(p => typeof p.value === 'number' || /^[+-]?\d+$/.test(String(p.value).trim())), formula: testFormula(parts), pmCost: Math.max(0, pmCost) };
   }
 
@@ -223,7 +223,7 @@ export class UsurpadorApp extends ApplicationV2 {
       <div class="t20tk-bz-profile-head"><strong>Usurpador</strong> <span>Heróis de Arton p. 40</span></div>
       <div class="t20tk-bz-facts">
         <span>${escapeHtml(setup.skill.label)} <b>${sign(setup.skill.value)}</b></span>
-        <span>Penalidade de armadura <b>${c.armorPenalty}</b></span>
+        <span>Penalidade de armadura <b>${c.armorPenalty}</b> <small>(só em Usurpar)</small></span>
         <span>PM <b>${c.pm}</b></span>
         ${c.profile && c.profile.level >= 20 ? '<span><b>Roubo Divino</b> ativo</span>' : ''}
         ${c.borrowed.length ? `<span>${c.borrowed.length} magia(s) usurpada(s) na ficha <button type="button" class="t20tk-bz-link" data-action="cleanup">remover</button></span>` : ''}
@@ -248,7 +248,7 @@ export class UsurpadorApp extends ApplicationV2 {
     const viaOf = new Map(res.results.map(r => [r.spell.uuid, r.via]));
     const rows = res.results.map(r => r.spell);
     if (!rows.length) return `<li class="t20tk-bz-empty">Nenhuma magia divina disponível.</li>`;
-    const setup = this.#testSetup({ holySymbol: this.view.holySymbol });
+    const setup = this.#testSetup({ holySymbol: this.view.holySymbol, usurp: true });
     return rows.map(s => {
       const dc = usurpDC(s.cost);
       return cardHTML({
@@ -300,7 +300,7 @@ export class UsurpadorApp extends ApplicationV2 {
     if (k.error) return `<section class="t20tk-us-cast">${back}<p class="t20tk-bz-warn">${escapeHtml(k.error)}</p></section>`;
     const c = this.ctxData;
     const usurp = k.kind === 'usurp';
-    const setup = this.#testSetup({ holySymbol: usurp && this.view.holySymbol });
+    const setup = this.#testSetup({ holySymbol: this.view.holySymbol, usurp });
     let enh = '';
     let cost = 0;
     let dc;
@@ -334,8 +334,8 @@ export class UsurpadorApp extends ApplicationV2 {
       <button type="button" class="t20tk-ui-button t20tk-ui-button--primary" data-action="castRoll">${zero ? 'Escolher 0' : 'Rolar'} ${escapeHtml(setup.skill.label)}${usurp ? ' e lançar' : ''}</button>
     </div>`;
     const rule = usurp
-      ? `<p class="t20tk-bz-note">CD 20 + custo final em PM (com os aprimoramentos). Falhou: a magia é perdida e os PM são gastos. Não pode escolher 10. Quando o bônus já alcança a CD, dá para escolher 0 (passa sem rolar, sem crítico). Depois de passar, a janela de conjuração do sistema abre com estes aprimoramentos já marcados.</p>`
-      : `<p class="t20tk-bz-note">Passou: você conta como devoto de ${escapeHtml(k.god)} e recebe este poder até o fim do dia. Confira os pré-requisitos do poder.</p>`;
+      ? `<p class="t20tk-bz-note">CD 15 + custo final em PM (com os aprimoramentos). Sofre penalidade de armadura. Falhou: a magia é perdida e os PM são gastos. Não pode escolher 10. Quando o bônus já alcança a CD, dá para escolher 0 (passa sem rolar, sem crítico). Depois de passar, a janela de conjuração do sistema abre com estes aprimoramentos já marcados.</p>`
+      : `<p class="t20tk-bz-note">Passou: você conta como devoto de ${escapeHtml(k.god)} e recebe este poder até o fim do dia ou até usar de novo. Falhou: perde 3 PM. Confira os pré-requisitos do poder.</p>`;
     return `<section class="t20tk-us-cast">${head}${desc}${enh}${this.#renderTest(setup, { holy: usurp })}${rule}${lacks}${sum}</section>`;
   }
 
@@ -371,7 +371,7 @@ export class UsurpadorApp extends ApplicationV2 {
     }).join('');
     const empty = !this.view.god && !q ? '<p class="t20tk-bz-note">Escolha um deus ou busque um poder pelo nome.</p>' : (!rows ? '<p class="t20tk-bz-empty">Nenhum poder encontrado.</p>' : '');
     return `<section class="t20tk-us-capture">
-      <p class="t20tk-bz-note">Escolha um deus, gaste 1 hora e faça ${escapeHtml(setup.skill.label)} <b>CD ${dc}</b> (+5 a cada uso no mesmo dia). Passou: você conta como devoto desse deus e recebe um poder concedido dele até o fim do dia (confira os pré-requisitos). Não precisa seguir as Obrigações & Restrições.</p>
+      <p class="t20tk-bz-note">Escolha um deus, gaste 1 hora e faça ${escapeHtml(setup.skill.label)} <b>CD ${dc}</b> (+5 a cada uso no mesmo dia). Passou: você conta como devoto desse deus e recebe um poder concedido dele até o fim do dia ou até usar de novo (confira os pré-requisitos; poderes exclusivos de classe não valem). Não precisa seguir as Obrigações & Restrições. Falhou: perde 3 PM.</p>
       ${status}
       <label class="t20tk-wz-field"><span>Buscar deus ou poder</span><input type="search" name="godq" value="${escapeHtml(this.view.godQuery)}" placeholder="Ex.: Khalmyr, Coragem Total…"></label>
       <div class="t20tk-wz-field"><span>Deus</span>${chips}</div>
@@ -526,7 +526,7 @@ export class UsurpadorApp extends ApplicationV2 {
     const dc = usurpDC(cost);
     const stale = actor.effects?.filter(e => e.getFlag?.(MODULE_ID, 'temp') === 'roubo-divino').map(e => e.id) ?? [];
     if (stale.length) await actor.deleteEmbeddedDocuments('ActiveEffect', stale);
-    const setup = this.#testSetup({ holySymbol: this.view.holySymbol });
+    const setup = this.#testSetup({ holySymbol: this.view.holySymbol, usurp: true });
     const { roll, success } = await this.#rollTest(setup, dc, `Usurpar: ${k.name}`);
     if (!success) {
       if (cost > 0 && typeof actor.spendMana === 'function') await actor.spendMana(cost, 0, false);
@@ -571,8 +571,11 @@ export class UsurpadorApp extends ApplicationV2 {
     const uses = c.usesToday + 1;
     this.cast = null;
     if (!success) {
-      // Falhou: mantém o poder de hoje (se houver) e só conta o uso.
-      await this.#saveCapture(c.captureActive ? { ...c.capture, uses } : { day: c.day, uses });
+      // Falhou: perde 3 PM. Usar de novo encerra o poder capturado antes (dura até o fim do dia ou até o próximo uso).
+      if (typeof actor.spendMana === 'function') await actor.spendMana(CAPTURE_FAIL_PM, 0, false);
+      if (c.capture?.itemId) await actor.items.get(c.capture.itemId)?.delete();
+      await this.#saveCapture({ day: c.day, uses });
+      await postCard(actor, { tool: 'usurpador', tone: 'error', title: 'Poder Capturado falhou', subtitle: `${k.name} (${k.god})`, note: `${CAPTURE_FAIL_PM} PM perdidos.${c.captureActive ? ` O poder capturado antes (${c.capture.power}) terminou com este uso.` : ''}` });
       return this.render();
     }
     if (c.capture?.itemId) await actor.items.get(c.capture.itemId)?.delete();
