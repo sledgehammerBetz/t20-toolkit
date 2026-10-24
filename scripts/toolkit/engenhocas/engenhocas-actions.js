@@ -14,7 +14,8 @@ import { skillSubstitutes, textBonuses, testParts, fixedBonus, allFixed, testFor
 import {
   FLAG_SCOPE, FLAG_KEY, SKILL_KEY, APARATO_BY_ID, ENGENHOCA_ITEM_TYPE, COUPLE_PRICE, isEngenhoca, engenhocaState, engenhocaFlags, inventorContext,
   activationDC, activationExtras, activationCost, resistanceBonus, outcomePatch, NEW_DAY_PATCH, aparatoBlocker, buildEngenhocaItem, craftCheck,
-  splitApplied, powerEffectKey, armorUpgradeCount, armorCapacity, coupleBlocker, actorEngenhocas
+  splitApplied, powerEffectKey, armorUpgradeCount, armorCapacity, coupleBlocker, actorEngenhocas,
+  engenhocaExecution, effectReminders, makerBlocker
 } from './engenhocas-rules.js';
 
 const DialogV2 = () => foundry.applications.api.DialogV2;
@@ -80,7 +81,7 @@ export async function craftEngenhoca(actor, { uuid, name = '', mode = 'hand', ro
     }
   }
 
-  const data = buildEngenhocaItem({ spell: { name: spell.name, img: spell.img, uuid: spell.uuid, system: spell.toObject().system, effects: spell.toObject().effects, flags: spell.toObject().flags }, name: finalName, mode, makerMaxPV: inv.maxPV, manutencao: inv.manutencao, inventorLevel: inv.level, price: check.price, userId: game.user.id });
+  const data = buildEngenhocaItem({ spell: { name: spell.name, img: spell.img, uuid: spell.uuid, system: spell.toObject().system, effects: spell.toObject().effects, flags: spell.toObject().flags }, name: finalName, mode, makerMaxPV: inv.maxPV, manutencao: inv.manutencao, inventorLevel: inv.level, price: check.price, userId: game.user.id, actorId: actor.id });
   const tp = money(actor) - check.price;
   const [[created]] = await Promise.all([actor.createEmbeddedDocuments('Item', [data]), pay && check.price ? actor.update({ 'system.dinheiro.tp': tp }) : null]);
   await postCard(actor, {
@@ -98,6 +99,7 @@ function buildPreview(actor, item, st, resBonus) {
   const data = foundry.utils.deepClone({ name: item.name, type: 'magia', img: item.img || snap.img, system: snap.system, effects: snap.effects ?? [], flags: snap.flags ?? {} });
   data.system.ativacao ??= {};
   data.system.ativacao.custo = 0;          // a engenhoca não paga o custo da magia, só os aprimoramentos
+  data.system.ativacao.execucao = engenhocaExecution(data.system.ativacao.execucao); // padrão ou a da magia, o que for maior
   data.system.resistencia ??= {};
   if (data.system.resistencia.txt) {
     data.system.resistencia.atributo = 'int'; // atributo-chave Inteligência
@@ -329,6 +331,8 @@ export async function activateEngenhoca(item) {
     if (fix) await repairEngenhoca(item);
     return null;
   }
+  const notMaker = makerBlocker(engenhocaFlags(item), actor.id);
+  if (notMaker && !game.user.isGM) return ui.notifications.warn(notMaker);
   st = await snapshotFromSource(item, st);
   if (!st) return ui.notifications.error(`Não encontrei a magia de "${item.name}". Fabrique de novo pela Oficina.`);
   if (!actor.system?.pericias?.[SKILL_KEY]) return ui.notifications.error('A ficha não tem Ofício (engenhoqueiro).');
@@ -396,6 +400,7 @@ export async function activateEngenhoca(item) {
   if (split.powers.has('automato')) notes.push('Ativada pelo autômato, com ação de movimento; o efeito sai dele (Autômato Engenhocado).');
   if (choice.take === 'ten') notes.push('Escolheu 10 com Maestria em Perícia (1 PM).');
   if (st.aparatos.includes('gatilho-corda')) notes.push('Gatilho de Corda: pode ativar com ação de movimento; depois, ação completa para dar corda.');
+  notes.push(...effectReminders(st.snapshot?.system));
   await runEffect(preview, configuration, cost.upgrades + cost.powers);
   if (notes.length) await postCard(actor, { tool: 'engenhocas', tone: 'success', title: 'Engenhoca ativada', subtitle: item.name, note: notes.join(' ') });
   return { success: true };
@@ -443,8 +448,8 @@ export async function uncoupleEngenhoca(item) {
 }
 
 /**
- * Acerta as engenhocas da ficha: tipo acessório (as antigas eram armadura leve e só uma ficava vestida)
- * e o espaço pela Manutenção Eficiente. Só o dono da ficha grava.
+ * Acerta as engenhocas da ficha: tipo acessório (as antigas eram armadura leve e só uma ficava vestida),
+ * o espaço pela Manutenção Eficiente e os PV (metade dos PV máximos do fabricante). Só o dono da ficha grava.
  */
 export async function syncEngenhocas(actor) {
   if (!actor?.isOwner) return;
@@ -456,6 +461,14 @@ export async function syncEngenhocas(actor) {
     if (item.system?.tipo !== ENGENHOCA_ITEM_TYPE) upd['system.tipo'] = ENGENHOCA_ITEM_TYPE;
     const cur = Number(item.system?.espacos);
     if ((cur === 0.5 || cur === 1) && cur !== spaces) upd['system.espacos'] = spaces;
+    // PV = metade dos PV do fabricante: acompanha os PV máximos dele.
+    const half = Math.floor(inv.maxPV / 2);
+    const pv = item.system?.pv ?? {};
+    const maker = engenhocaFlags(item)?.makerActorId;
+    if (half > 0 && (!maker || maker === actor.id) && Number(pv.max) !== half) {
+      upd['system.pv.max'] = half;
+      upd['system.pv.value'] = Number(pv.value) >= Number(pv.max) ? half : Math.min(Number(pv.value) || 0, half);
+    }
     if (Object.keys(upd).length) updates.push({ _id: item.id, ...upd });
   }
   if (updates.length) await actor.updateEmbeddedDocuments('Item', updates);

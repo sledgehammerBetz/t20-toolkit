@@ -5,7 +5,7 @@
  *   Preço T$ 100 × PM da magia. Teste de Ofício (engenhoqueiro) CD 20 + PM.
  * Limite: Inteligência (+3 com Manutenção Eficiente, que também reduz o espaço para 0,5).
  * Item: Minúsculo, 1 espaço, Defesa 15, PV = metade dos PV do fabricante, RD 5; empunhada ou vestida.
- * Ativação: ação padrão (ou a execução da magia), Ofício (engenhoqueiro) CD 15 + PM, +5 por ativação no mesmo dia,
+ * Ativação: só o fabricante; ação padrão (ou a execução da magia, o que for maior), Ofício (engenhoqueiro) CD 15 + PM, +5 por ativação no mesmo dia,
  *   +1 por PM de aprimoramento (limite de aprimoramentos = Int). Falha: enguiça (1 hora para consertar).
  * Aparatos: até 2 por engenhoca; 1 aparato +2 na CD, 2 aparatos +5 (Aparato Personalizado ignora o primeiro).
  * O teste de ativação sofre penalidade de armadura (já está no Ofício (engenhoqueiro) da ficha; o Giroscópio tira).
@@ -106,7 +106,7 @@ export function craftCheck(spell, { inventorLevel = 0, goblinoide = false, owned
 }
 
 /** Dados do item `equipamento` da engenhoca (formato v2, compatível com as engenhocas antigas). */
-export function buildEngenhocaItem({ spell, name, mode = 'hand', makerMaxPV = 0, manutencao = false, inventorLevel = 0, price = 0, userId = '', now = Date.now() }) {
+export function buildEngenhocaItem({ spell, name, mode = 'hand', makerMaxPV = 0, manutencao = false, inventorLevel = 0, price = 0, userId = '', actorId = '', now = Date.now() }) {
   const s = spell.system ?? {};
   const circle = Number(s.circulo) || 1;
   const pm = pmOf(circle);
@@ -116,7 +116,8 @@ export function buildEngenhocaItem({ spell, name, mode = 'hand', makerMaxPV = 0,
   const modeLabel = mode === 'body' ? 'vestida' : 'empunhada';
   const description = `<p><b>Engenhoca</b> (${modeLabel}) que simula <b>${spell.name}</b> (${circle}º círculo).</p>
 <p>Minúscula · ${String(spaces).replace('.', ',')} espaço · Defesa 15 · PV ${pv} · RD 5.</p>
-<p>Ativação: Ofício (engenhoqueiro) CD ${15 + pm}, +5 por ativação no mesmo dia. Falha: enguiça (1 hora para consertar).</p>
+<p>Ativação (só o fabricante): ação padrão ou a execução da magia, o que for maior; Ofício (engenhoqueiro) CD ${15 + pm}, +5 por ativação no mesmo dia, com penalidade de armadura. Falha: enguiça (1 hora para consertar).</p>
+<p>Efeito mundano (atributo-chave Int): não pode ser dissipado e funciona em áreas de antimagia.</p>
 <hr><h3>Efeito simulado</h3>${s.description?.value ?? ''}`;
   return {
     name: name || spell.name,
@@ -145,12 +146,41 @@ export function buildEngenhocaItem({ spell, name, mode = 'hand', makerMaxPV = 0,
           physical: { size: 'Minúsculo', baseSpaces: 1, effectiveSpaces: spaces, defense: 15, pv, rd: 5, manufacturerMaxPVAtCreation: makerMaxPV },
           inventorLevelAtCreation: inventorLevel, circleLimitAtCreation: maxCircle(inventorLevel),
           jammed: false, usesToday: 0, dayKey: null, aparatos: [],
-          createdBy: userId, createdAt: now
+          createdBy: userId, makerActorId: actorId, createdAt: now
         }
       }
     }
   };
 }
+
+/* ---------- execução e avisos do efeito ---------- */
+
+/** Ordem das execuções do sistema (CONFIG.T20.abilityActivationTypes); passiva e especial ficam fora. */
+const EXEC_ORDER = ['free', 'reaction', 'move', 'action', 'full', 'minute', 'hour', 'day'];
+
+/** Execução da ativação: ação padrão ou a execução da magia, o que for maior. */
+export function engenhocaExecution(exec) {
+  const i = EXEC_ORDER.indexOf(exec);
+  if (i < 0) return exec || 'action';
+  return i < EXEC_ORDER.indexOf('action') ? 'action' : exec;
+}
+
+/**
+ * Lembretes do efeito que o Toolkit não cobra sozinho (JdA p. 70): custo especial a cada ativação,
+ * efeito sustentado (1 PM no início de cada turno, um por vez) e Misticismo trocado por Ofício (engenhoqueiro).
+ * `system`: o system da magia simulada.
+ */
+export function effectReminders(system = {}) {
+  const text = String(system.description?.value ?? '').replace(/<[^>]+>/g, ' ');
+  const out = [];
+  if (/componente\s+material|custo\s+(?:adicional|especial)/i.test(text)) out.push('Custo especial da magia: pague a cada ativação.');
+  if (system.duracao?.units === 'sust') out.push('Sustentado: pague 1 PM no início de cada um dos seus turnos; só um efeito sustentado de engenhoca por vez.');
+  if (/misticismo/i.test(text)) out.push('Onde a magia pede Misticismo, use Ofício (engenhoqueiro).');
+  return out;
+}
+
+/** Só o fabricante ativa. Engenhocas antigas, sem o registro do fabricante, passam. */
+export const makerBlocker = (flags, actorId) => (flags?.makerActorId && flags.makerActorId !== actorId ? 'Só quem fabricou a engenhoca pode ativá-la.' : '');
 
 /* ---------- estado e ativação ---------- */
 
