@@ -1,9 +1,9 @@
 /**
  * Usurpador (variante de Clérigo, Heróis de Arton p. 40). Funções puras.
- * - Usurpar: lança qualquer magia divina de um círculo que acessa com Enganação CD 20 + custo em PM.
+ * - Usurpar: lança qualquer magia divina de um círculo que acessa com Enganação CD 15 + custo em PM.
  *   Falhou: a magia é perdida e os PM são gastos. Não pode escolher 10. Sofre penalidade de armadura.
  *   −5 se houver símbolo sagrado visível.
- * - Poder Capturado (4º nível): 1 hora + Enganação CD 20 (+5 por uso adicional no mesmo dia).
+ * - Poder Capturado (4º nível): 1 hora + Enganação CD 20 (+5 por uso adicional no mesmo dia). Falhou: perde 3 PM.
  *   Passou: conta como devoto do deus e recebe um poder concedido dele até o fim do dia ou o próximo uso.
  * - Roubo Divino (20º nível): a cada 10 pontos no teste de Usurpar, −1 PM e +1 na CD da magia.
  */
@@ -40,8 +40,11 @@ export const POWER_ALIASES = Object.freeze({
 });
 
 export function usurpDC(spellCost, extraPM = 0) {
-  return 20 + (Number(spellCost) || 0) + (Number(extraPM) || 0);
+  return 15 + (Number(spellCost) || 0) + (Number(extraPM) || 0);
 }
+
+/** PM perdidos ao falhar no Poder Capturado. */
+export const CAPTURE_FAIL_PM = 3;
 
 export function captureDC(usesToday) {
   return 20 + 5 * Math.max(0, usesToday || 0);

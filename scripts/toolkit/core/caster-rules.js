@@ -70,7 +70,7 @@ export function buildCasterProfiles({ classes = [], arcanistPaths = [], schoolsB
       profile.schools = chosen.length ? chosen : null;
       if (chosen.length !== def.schools) profile.warnings.push(`Escolha as ${def.schools} escolas de magia do ${def.label} para filtrar corretamente.`);
     }
-    if (def.usurper) profile.notes.push('O Usurpador não aprende magias: lança qualquer magia divina dos círculos que acessa usando Usurpar (Enganação CD 20 + PM).');
+    if (def.usurper) profile.notes.push('O Usurpador não aprende magias: lança qualquer magia divina dos círculos que acessa usando Usurpar (Enganação CD 15 + PM).');
     if (def.necromancer) profile.notes.push('Necromante: pode aprender magias divinas de necromancia, não pode aprender encantamento e pelo menos metade das magias aprendidas devem ser de necromancia.');
     profiles.push(profile);
   }
