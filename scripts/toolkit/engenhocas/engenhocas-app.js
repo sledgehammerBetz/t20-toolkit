@@ -15,7 +15,7 @@ import { toolFrame, onNavigate, switchTheme } from '../ui/frame.js';
 import { metric, pill } from '../ui/components.js';
 import { APARATOS, APARATO_BY_ID, CRAFTABLE_TYPES, craftCheck, activationDC, aparatoBlocker, engenhocaState } from './engenhocas-rules.js';
 import { actorInventor, actorEngenhocas, craftEngenhoca, activateEngenhoca, repairEngenhoca, newDay, newScene, dismantleEngenhoca, installAparato, removeAparato, couplingArmors, automatoUsed, coupleEngenhoca, uncoupleEngenhoca, syncEngenhocas, activationSubstitutes } from './engenhocas-actions.js';
-import { COUPLE_PRICE, coupleBlocker } from './engenhocas-rules.js';
+import { COUPLE_PRICE, coupleBlocker, engenhocaExecution, effectReminders, engenhocaFlags } from './engenhocas-rules.js';
 
 const ApplicationV2 = globalThis.foundry?.applications?.api?.ApplicationV2 ?? class {};
 
@@ -212,7 +212,9 @@ export class EngenhocasApp extends ApplicationV2 {
         <div class="t20tk-pills">${pill(`${st.circle}º círculo`)}${pill(this.#formLabel(st, true))}${pill(`PV ${item.system?.pv?.value ?? '—'}/${item.system?.pv?.max ?? '—'}`)}${pill('Defesa 15 · RD 5')}</div>
       </div></div>
       ${st.jammed ? '<p class="t20tk-bz-warn">Enguiçada: consertar leva 1 hora de trabalho.</p>' : ''}
-      <div class="t20tk-metrics">${metric('Próxima CD', String(dc.dc))}${metric('Ativações hoje', String(st.usesToday))}${metric('Execução', t20Label('abilityActivationTypes', sys.ativacao?.execucao) || 'padrão')}${metric('Alcance', t20Label('distanceUnits', sys.alcance))}${metric('Duração', duration)}${metric('Resistência', sys.resistencia?.txt || 'Sem resistência')}</div>
+      ${engenhocaFlags(item)?.makerActorId && engenhocaFlags(item).makerActorId !== this.actor.id ? '<p class="t20tk-bz-warn">Outro personagem fabricou esta engenhoca: só o fabricante pode ativá-la.</p>' : ''}
+      ${effectReminders(sys).map(r => `<p class="t20tk-bz-note">${escapeHtml(r)}</p>`).join('')}
+      <div class="t20tk-metrics">${metric('Próxima CD', String(dc.dc))}${metric('Ativações hoje', String(st.usesToday))}${metric('Execução', t20Label('abilityActivationTypes', engenhocaExecution(sys.ativacao?.execucao)))}${metric('Alcance', t20Label('distanceUnits', sys.alcance))}${metric('Duração', duration)}${metric('Resistência', sys.resistencia?.txt || 'Sem resistência')}</div>
       <p class="t20tk-bz-note">CD = ${dc.parts.map(([k, v]) => `${k.toLowerCase()} ${v}`).join(' + ')}. Aprimoramentos somam +1 por PM (limite ${inv.int} PM).</p>
       <div class="t20tk-eng-actions">
         ${st.jammed ? `<button type="button" class="t20tk-ui-button t20tk-ui-button--primary" data-action="repair" data-id="${item.id}">Consertar</button>` : `<button type="button" class="t20tk-ui-button t20tk-ui-button--primary" data-action="activate" data-id="${item.id}">Ativar</button>`}
@@ -330,7 +332,7 @@ export class EngenhocasApp extends ApplicationV2 {
         <div class="t20tk-pills">${pill(`${Number(s.circulo)}º círculo`)}${pill(`${check.pm} PM`)}${pill(SPELL_TYPES[s.tipo] ?? s.tipo)}${pill(SPELL_SCHOOLS[s.escola] ?? s.escola)}</div>
       </div></div>
       ${form}
-      <div class="t20tk-metrics">${metric('Preço', `T$ ${check.price}`)}${metric('CD fabricar', String(check.dc))}${metric('CD ativar', String(15 + check.pm))}${metric('PV do item', String(pv))}${metric('Espaço', inv?.manutencao ? '0,5' : '1')}${metric('Execução', t20Label('abilityActivationTypes', s.ativacao?.execucao))}</div>
+      <div class="t20tk-metrics">${metric('Preço', `T$ ${check.price}`)}${metric('CD fabricar', String(check.dc))}${metric('CD ativar', String(15 + check.pm))}${metric('PV do item', String(pv))}${metric('Espaço', inv?.manutencao ? '0,5' : '1')}${metric('Execução', t20Label('abilityActivationTypes', engenhocaExecution(s.ativacao?.execucao)))}${metric('Tempo', '1 semana')}</div>
       <details class="t20tk-disclosure" data-key="efeito"><summary>Descrição da magia</summary><div class="t20tk-disclosure-body t20tk-bz-description">${d.html}</div></details>
       <details class="t20tk-disclosure" data-key="aprimoramentos"><summary>Aprimoramentos <span class="t20tk-count">${d.enhancements.length}</span></summary><div class="t20tk-disclosure-body">${d.enhancements.length ? `<div class="t20tk-enh">${d.enhancements.map(e => `<div class="t20tk-enh-row"><span class="t20tk-enh-cost">${e.cost ? `+${escapeHtml(e.cost)} PM` : 'Especial'}</span><div>${escapeHtml(e.text)}</div></div>`).join('')}</div><p class="t20tk-bz-note">Na ativação, cada PM de aprimoramento soma +1 na CD.</p>` : '<p class="t20tk-bz-note">Sem aprimoramentos.</p>'}</div></details>`;
   }
