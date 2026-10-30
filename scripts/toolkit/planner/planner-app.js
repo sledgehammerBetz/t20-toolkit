@@ -17,7 +17,7 @@ import { crossClassExtra } from '../core/caster-context.js';
 import { viaSlots, viaFlag, viaCtx, isAlmaLivrePick, almaLivre } from './cross-class.js';
 import { devotionCheck, mustBeDevout } from '../core/gods.js';
 import { BASE_CLASSES, progressionFor, classInfo, gainsAt, buildTimeline, evaluatePower, excludedPower } from './planner-rules.js';
-import { toolFrame, onNavigate, reopen } from '../ui/frame.js';
+import { toolFrame, onNavigate, onTheme, reopen } from '../ui/frame.js';
 import { postCard } from '../ui/chat.js';
 import { disclosure } from '../ui/components.js';
 import { getTableRules } from '../core/table-rules.js';
@@ -53,6 +53,7 @@ export class PlannerApp extends ApplicationV2 {
       applyCreation: inBatch(PlannerApp.#onApplyCreation),
       openBuscador: PlannerApp.#onOpenBuscador,
       t20nav: onNavigate,
+      theme: onTheme,
       openSheet: PlannerApp.#onOpenSheet,
       ...WIZARD_ACTIONS,
       ...LEVEL_ACTIONS,

@@ -22,20 +22,23 @@
 .t20tk-bz button:disabled { cursor: not-allowed; }
 .t20tk-bz :is(input, select, textarea) { font-family: var(--t20-font-ui); }
 
-/* ---------- moldura: abas das ferramentas + título ---------- */
-.t20tk-shell.t20tk-frame { display: flex; flex-direction: column; }
-.t20tk-tools { display: flex; flex: 0 0 auto; align-items: stretch; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--color-tabs-border, var(--t20-border-subtle)); overflow-x: auto; scrollbar-width: none; }
-.t20tk-frame .t20tk-tools-tab { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; width: auto; height: auto; min-height: 0; margin: 0 0 -1px; padding: 8px 10px 7px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--color-text-secondary); font-size: 12px; font-weight: 600; white-space: nowrap; }
-.t20tk-frame .t20tk-tools-tab i { font-size: 12px; }
-.t20tk-frame .t20tk-tools-tab:hover { background: none; color: var(--color-text-primary); text-shadow: 0 0 10px var(--color-shadow-primary); }
-.t20tk-frame .t20tk-tools-tab.active { outline: none; box-shadow: none; color: var(--color-text-emphatic, var(--t20-text-primary)); border-bottom-color: var(--t20-accent); text-shadow: 0 0 10px var(--color-shadow-primary); }
-.t20tk-frame .t20tk-tools-tab.active i { color: var(--t20-accent); }
-.t20tk-frame .t20tk-tools-tab--gm { margin-left: auto; }
-.t20tk-main { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; }
+/* ---------- moldura: barra de ferramentas + título ---------- */
+.t20tk-shell.t20tk-frame { display: grid; grid-template-columns: 52px minmax(0, 1fr); }
+.t20tk-rail { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 5px 10px; background: var(--t20-bg-canvas); border-top: 4px solid var(--t20-accent); border-right: 1px solid var(--t20-border-subtle); min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.t20tk-rail-brand { font-family: var(--t20-font-head); font-weight: 700; font-size: 15px; color: var(--t20-accent); margin: 4px 0 10px; letter-spacing: .02em; }
+.t20tk-rail-spacer { flex: 1 1 auto; }
+.t20tk-frame .t20tk-rail-btn { display: grid; place-items: center; width: 38px; height: 38px; min-height: 0; flex: 0 0 auto; padding: 0; margin: 0; border: 0; border-radius: var(--t20-radius); background: transparent; color: var(--t20-text-secondary); font-size: 16px; }
+.t20tk-frame .t20tk-rail-btn:hover { background: var(--t20-bg-interactive); color: var(--t20-text-primary); }
+.t20tk-frame .t20tk-rail-btn[aria-current="page"] { background: var(--t20-bg-selected); color: var(--t20-accent); box-shadow: inset 3px 0 0 var(--t20-accent); }
+.t20tk-frame .t20tk-rail-btn--gm { color: var(--t20-accent); }
+.t20tk-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; overflow: hidden; }
 .t20tk-main > * { flex: 0 0 auto; }
-@container (max-width: 760px) { .t20tk-frame .t20tk-tools-tab > span { display: none; } .t20tk-frame .t20tk-tools-tab { padding: 8px 9px 7px; } .t20tk-frame .t20tk-tools-tab i { font-size: 14px; } }
 
-.t20tk-head-actor { margin-left: auto; align-self: flex-start; padding-top: 2px; display: flex; align-items: baseline; flex-wrap: wrap; justify-content: flex-end; gap: 2px 8px; min-width: 0; font-size: 12px; color: var(--t20-text-secondary); text-align: right; }
+/* botão de tema (claro/escuro) */
+.t20tk-shell .t20tk-theme-btn { flex: 0 0 auto; display: grid; place-items: center; width: 34px; height: 30px; min-height: 0; padding: 0; margin: 0; border: 0; border-radius: var(--t20-radius); background: var(--t20-bg-interactive); color: var(--t20-accent); font-size: 14px; box-shadow: none; }
+.t20tk-shell .t20tk-theme-btn:hover { background: var(--t20-bg-selected); color: var(--t20-accent); }
+
+.t20tk-head-actor { margin-left: auto; align-self: flex-start; padding-top: 6px; display: flex; align-items: baseline; flex-wrap: wrap; justify-content: flex-end; gap: 2px 8px; min-width: 0; font-size: 12px; color: var(--t20-text-secondary); text-align: right; }
 .t20tk-head-actor b { font-size: 13px; color: var(--t20-text-primary); }
 
 .t20tk-titlebar { display: flex; align-items: flex-start; gap: 12px; padding: 12px var(--t20-pad) 10px; }

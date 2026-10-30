@@ -1,5 +1,6 @@
 /** Apresentação do Hub. Sem side-effects, importação nem alteração de ficha. */
 import { TOOLKIT_FEATURES } from '../features.js';
+import { getToolkitTheme, themeClasses } from './theme-controller.js';
 
 const esc = x => String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const statusLabel = Object.freeze({available:'Disponível',preview:'Prévia funcional',planned:'Em desenvolvimento'});
@@ -43,10 +44,10 @@ function nav(features) {
   }).join('')}</section>`).join('');
 }
 
-/** As cores seguem o tema claro/escuro do Foundry. */
-export function renderToolkitHub(features=TOOLKIT_FEATURES) {
+/** Tema: o do Foundry, ou o escolhido no botão de tema das ferramentas. */
+export function renderToolkitHub(features=TOOLKIT_FEATURES,{theme=getToolkitTheme()}={}) {
   const safeFeatures=orderedToolkitFeatures(features);
-  return `<section class="t20tk-shell t20tk-hub" aria-label="T20 Toolkit">
+  return `<section class="t20tk-shell t20tk-hub ${themeClasses(theme)}" data-theme="${theme}" aria-label="T20 Toolkit">
     <aside class="t20tk-ui-sidebar"><div class="t20tk-ui-brand"><strong>T20 TOOLKIT</strong><small>FERRAMENTAS DE ARTON</small></div>
     <nav class="t20tk-ui-navigation" aria-label="Ferramentas do Toolkit">${nav(safeFeatures)}</nav></aside>
     <div class="t20tk-ui-workspace"><header class="t20tk-ui-toolbar"><span>T20 Toolkit <i>/</i> Início</span>

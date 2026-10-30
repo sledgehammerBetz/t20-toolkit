@@ -11,7 +11,7 @@ import { SPELL_TYPES, SPELL_SCHOOLS, CIRCLES, escapeHtml, fold } from '../core/t
 import { getSpellCatalog } from '../core/spells/spell-catalog.js';
 import { filterSpells, filterOptions, EMPTY_FILTERS } from '../core/spells/spell-filter.js';
 import { spellFilterPanel, bindSpellFilterPanel, viaTags } from '../ui/spell-filter-panel.js';
-import { toolFrame, onNavigate } from '../ui/frame.js';
+import { toolFrame, onNavigate, onTheme } from '../ui/frame.js';
 import { metric, pill } from '../ui/components.js';
 import { APARATOS, APARATO_BY_ID, CRAFTABLE_TYPES, craftCheck, activationDC, aparatoBlocker, engenhocaState } from './engenhocas-rules.js';
 import { actorInventor, actorEngenhocas, craftEngenhoca, activateEngenhoca, repairEngenhoca, newDay, newScene, dismantleEngenhoca, installAparato, removeAparato, couplingArmors, automatoUsed, coupleEngenhoca, uncoupleEngenhoca, syncEngenhocas, activationSubstitutes } from './engenhocas-actions.js';
@@ -53,6 +53,7 @@ export class EngenhocasApp extends ApplicationV2 {
       couple: EngenhocasApp.#onCouple,
       uncouple: EngenhocasApp.#onUncouple,
       t20nav: onNavigate,
+      theme: onTheme,
       openSheet: EngenhocasApp.#onOpenSheet
     }
   };

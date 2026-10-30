@@ -8,7 +8,7 @@ import { watchActor } from '../ui/live-refresh.js';
 import { MODULE_ID, MODULE_VERSION } from '../../constants.js';
 import { openReport } from '../beta.js';
 import { escapeHtml, fold, actorClasses, actorSpells, arcanistPaths } from '../core/t20.js';
-import { toolFrame, onNavigate, reopen } from '../ui/frame.js';
+import { toolFrame, onNavigate, onTheme, reopen } from '../ui/frame.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { TOOLKIT_FEATURES } from '../features.js';
 import { buildCasterProfiles, learningCapacity } from '../core/caster-rules.js';
@@ -119,6 +119,7 @@ export class HomeApp extends ApplicationV2 {
     position: { width: 940, height: 700 },
     actions: {
       t20nav: onNavigate,
+      theme: onTheme,
       openSheet: HomeApp.#onOpenSheet,
       openTool: HomeApp.#onOpenTool,
       pickActor: HomeApp.#onPickActor,

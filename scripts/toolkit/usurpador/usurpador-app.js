@@ -24,7 +24,7 @@ import {
   TEST_SKILL, castCost, effectCost, skillSubstitutes, textBonuses, testParts, fixedBonus, testFormula, chanceOf
 } from './usurpador-rules.js';
 import { today } from '../grimorio/grimorio-app.js';
-import { toolFrame, onNavigate, reopen } from '../ui/frame.js';
+import { toolFrame, onNavigate, onTheme, reopen } from '../ui/frame.js';
 import { cardHTML } from '../ui/components.js';
 import { enrichDescription } from '../ui/enrich.js';
 
@@ -67,6 +67,7 @@ export class UsurpadorApp extends ApplicationV2 {
       endCapture: UsurpadorApp.#onEndCapture,
       cleanup: UsurpadorApp.#onCleanup,
       t20nav: onNavigate,
+      theme: onTheme,
       openSheet: UsurpadorApp.#onOpenSheet,
       openSpell: UsurpadorApp.#onOpenSpell
     }

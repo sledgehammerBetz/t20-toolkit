@@ -1,9 +1,11 @@
 /**
- * Moldura comum das janelas do Toolkit: abas das ferramentas no estilo do Foundry, título e personagem.
- * As cores vêm do tema claro/escuro do Foundry (toolkit-theme.css); o Toolkit não tem tema próprio.
+ * Moldura comum das janelas do Toolkit: barra de ferramentas à esquerda, título, personagem e botão de tema.
+ * As cores vêm de toolkit-theme.css sobre as variáveis do Foundry; o tema segue o do Foundry até o usuário
+ * escolher outro no botão (ui/theme-controller.js).
  * Usada pelas janelas ApplicationV2 (toolFrame) e pelos DialogV2 das Engenhocas (frameParts).
  */
 import { escapeHtml } from '../core/t20.js';
+import { getToolkitTheme, themeButton, themeClasses, switchTheme } from './theme-controller.js';
 
 export const TOOLS = Object.freeze([
   { id: 'hub', icon: 'fa-solid fa-house', label: 'Início' },
@@ -13,21 +15,22 @@ export const TOOLS = Object.freeze([
   { id: 'escriba', icon: 'fa-solid fa-feather', label: 'Escriba', title: 'Escriba Arcano' },
   { id: 'usurpador', icon: 'fa-solid fa-hand-sparkles', label: 'Usurpador' },
   { id: 'engenhocas', icon: 'fa-solid fa-gears', label: 'Engenhocas' },
-  { id: 'regras', icon: 'fa-solid fa-scale-balanced', label: 'Regras', title: 'Regras da mesa', bottom: true }
+  { id: 'regras', icon: 'fa-solid fa-scale-balanced', label: 'Regras da mesa', bottom: true }
 ]);
 
 /** Pedaços da moldura, em HTML. */
 export function frameParts({ tool, actor = null, who = '', eyebrow = '', title = '', subtitle = '' }) {
-  const tabs = `<nav class="t20tk-tools" aria-label="Ferramentas do T20 Toolkit">${TOOLS.map(t => {
+  const theme = getToolkitTheme();
+  const rail = `<nav class="t20tk-rail" aria-label="Ferramentas do T20 Toolkit"><span class="t20tk-rail-brand">T20</span>${TOOLS.map(t => {
     const name = t.title ?? t.label;
-    return `<button type="button" class="t20tk-tools-tab${t.bottom ? ' t20tk-tools-tab--gm' : ''}${t.id === tool ? ' active' : ''}" data-action="t20nav" data-tool="${t.id}" data-tooltip="${escapeHtml(name)}" aria-label="${escapeHtml(name)}"${t.id === tool ? ' aria-current="page"' : ''}><i class="${t.icon}" inert></i><span>${escapeHtml(t.label)}</span></button>`;
+    return `${t.bottom ? '<span class="t20tk-rail-spacer"></span>' : ''}<button type="button" class="t20tk-rail-btn${t.bottom ? ' t20tk-rail-btn--gm' : ''}" data-action="t20nav" data-tool="${t.id}" data-tooltip="${escapeHtml(name)}" data-tooltip-direction="RIGHT" aria-label="${escapeHtml(name)}"${t.id === tool ? ' aria-current="page"' : ''}><i class="${t.icon}" inert></i></button>`;
   }).join('')}</nav>`;
   const person = actor === false ? '' : actor
     ? `<span class="t20tk-head-actor"><b>${escapeHtml(actor.name)}</b>${who ? `<span>${who}</span>` : ''}<button type="button" class="t20tk-bz-link" data-action="openSheet">Abrir ficha</button></span>`
     : '<span class="t20tk-head-actor"><b>Sem personagem</b><span>abra pela ficha (botão Toolkit)</span></span>';
   const heading = title ? `<div class="t20tk-titlebar-text">${eyebrow ? `<p class="t20tk-eyebrow">${escapeHtml(eyebrow)}</p>` : ''}<h2>${escapeHtml(title)}</h2>${subtitle ? `<p class="t20tk-subtitle">${subtitle}</p>` : ''}</div>` : '';
-  const titlebar = heading || person ? `<header class="t20tk-titlebar">${heading}${person}</header>` : '';
-  return { tabs, titlebar };
+  const titlebar = `<header class="t20tk-titlebar">${heading}${person}${themeButton(theme)}</header>`;
+  return { theme, rail, titlebar };
 }
 
 /**
@@ -35,9 +38,9 @@ export function frameParts({ tool, actor = null, who = '', eyebrow = '', title =
  * @param {string} content  HTML da ferramenta
  */
 export function toolFrame({ tool, extra = '', ...rest }, content = '') {
-  const { tabs, titlebar } = frameParts({ tool, ...rest });
-  return `<div class="t20tk-shell t20tk-bz t20tk-frame ${extra}" data-tool="${tool}">
-    ${tabs}
+  const { theme, rail, titlebar } = frameParts({ tool, ...rest });
+  return `<div class="t20tk-shell t20tk-bz t20tk-frame ${themeClasses(theme)} ${extra}" data-theme="${theme}" data-tool="${tool}">
+    ${rail}
     <div class="t20tk-main">${titlebar}${content}</div>
   </div>`;
 }
@@ -58,6 +61,9 @@ export async function navigateTool(app, target) {
 
 /** Handler para DEFAULT_OPTIONS.actions (this = a janela). */
 export function onNavigate(event, target) { return navigateTool(this, target); }
+
+/** Handler do botão de tema (ação "theme"). */
+export function onTheme(event, target) { return switchTheme(target.dataset.themeValue); }
 
 /** Traz para frente uma janela já aberta; se ela falhou ao desenhar, tenta desenhar de novo. */
 export async function reopen(app) {

@@ -13,7 +13,7 @@ import { filterSpells, filterOptions, EMPTY_FILTERS } from '../core/spells/spell
 import { spellFilterPanel, bindSpellFilterPanel, viaTags } from '../ui/spell-filter-panel.js';
 import { getSpellIndex } from '../core/spell-index.js';
 import { copyCost, checkRequirements, canCopy } from './escriba-rules.js';
-import { toolFrame, onNavigate, reopen } from '../ui/frame.js';
+import { toolFrame, onNavigate, onTheme, reopen } from '../ui/frame.js';
 import { cardHTML } from '../ui/components.js';
 import { postCard } from '../ui/chat.js';
 
@@ -30,6 +30,7 @@ export class EscribaApp extends ApplicationV2 {
       copy: EscribaApp.#onCopy,
       switchView: EscribaApp.#onTab,
       t20nav: onNavigate,
+      theme: onTheme,
       openSheet: EscribaApp.#onOpenSheet
     }
   };

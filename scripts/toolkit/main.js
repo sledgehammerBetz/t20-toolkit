@@ -11,6 +11,7 @@ import { registerDirectUseSetting, installDirectUse } from './engenhocas/direct-
 import { migrateLegacyWorldSettings, LEGACY_MODULE_ID } from './core/settings-migration.js';
 
 import { renderToolkitHub } from './ui/hub-view.js';
+import { registerToolkitThemeSetting, getToolkitTheme, setToolkitTheme } from './ui/theme-controller.js';
 import { installErrorLog, registerBetaSettings, openReport, diagnostics, errorLog, betaWelcome } from './beta.js';
 
 /**
@@ -96,6 +97,7 @@ if (globalThis.Hooks?.once) {
   installErrorLog();
   Hooks.once('init',()=>{
     registerBetaSettings();
+    registerToolkitThemeSetting();
     registerCastingGuardSetting();
     registerTableRulesSetting();
     registerDirectUseSetting();
@@ -103,6 +105,7 @@ if (globalThis.Hooks?.once) {
     globalThis.game.t20Toolkit=Object.freeze({
       version:MODULE_VERSION, features:TOOLKIT_FEATURES,
       engenhocas:Object.freeze({open:openEngenhocas,activate:activateEngenhoca,list:actorEngenhocas}),
+      theme:Object.freeze({get:getToolkitTheme,set:setToolkitTheme}),
       open:openHome,
       home:Object.freeze({open:openHome}),
       hub:Object.freeze({open:openToolkitHub}),

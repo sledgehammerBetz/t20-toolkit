@@ -1,7 +1,7 @@
 /* T20 Toolkit — tokens de cor e Hub.
- * As cores seguem o tema claro/escuro que cada usuário escolheu no Foundry (Configurar interface):
- * texto e fundo vêm das variáveis do Foundry V13; o resto usa light-dark(), que lê o color-scheme
- * que o Foundry põe em cada janela. O vermelho T20 é só a cor de destaque.
+ * A moldura põe na janela as classes de tema do Foundry (themed theme-light|theme-dark): o tema do Foundry por padrão,
+ * ou o escolhido no botão de tema (ui/theme-controller.js). Assim texto, botões e campos vêm das variáveis do Foundry V13
+ * e o resto usa light-dark(), que lê o color-scheme dessas classes. O vermelho T20 é a cor de destaque.
  * Exclusivamente sob .t20tk-shell e .t20tk-engenhocas-dialog. Sem regras de html, :root, .app, ActorSheet ou body.
  */
 .t20tk-shell, .t20tk-engenhocas-dialog {
@@ -13,7 +13,7 @@
   --t20-bg-interactive: light-dark(rgb(0 0 0 / .1), rgb(255 255 255 / .1));
   --t20-bg-selected: color-mix(in srgb, var(--t20-accent) 16%, transparent);
   --t20-text-primary: var(--color-text-primary);
-  --t20-text-secondary: var(--color-form-hint, var(--color-text-subtle));
+  --t20-text-secondary: light-dark(var(--color-dark-4, #444), var(--color-light-5, #9f8475));
   --t20-text-on-accent: light-dark(#FFFFFF, #1D1217);
   --t20-border-subtle: light-dark(rgb(0 0 0 / .18), rgb(255 255 255 / .14));
   --t20-border-strong: light-dark(rgb(0 0 0 / .4), rgb(255 255 255 / .32));
@@ -25,6 +25,10 @@
   --t20-error: light-dark(#AA2B38, #FFA1A8);
   --t20-focus-ring: var(--t20-accent);
 }
+/* Fundo da janela no tema da moldura, mesmo quando ele difere do tema do Foundry.
+ * O pergaminho é o do Foundry (public/ui), com caminho relativo a modules/t20-toolkit/styles/. */
+.t20tk-shell.theme-light { --t20-bg-window: #efe6d8 url("../../../ui/parchment.jpg") repeat; }
+.t20tk-shell.theme-dark { --t20-bg-window: var(--color-cool-5, #0b0a13); }
 .t20tk-shell.t20tk-hub,.t20tk-shell.t20tk-hub *{box-sizing:border-box}
 .t20tk-shell.t20tk-hub{container-type:inline-size;display:flex;padding:0;overflow:auto;width:100%;min-width:0;max-height:min(82vh,900px);min-height:420px;line-height:1.43;background:var(--t20-bg-window);color:var(--t20-text-primary);font-family:var(--t20-font-ui)}
 .t20tk-shell.t20tk-hub :where(h2,h3,p){color:inherit}

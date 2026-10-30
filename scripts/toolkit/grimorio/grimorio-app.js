@@ -13,7 +13,7 @@ import { MODULE_ID } from '../../constants.js';
 import { postCard } from '../ui/chat.js';
 import { SPELL_SCHOOLS, escapeHtml, actorSpells, arcanistPaths, actorClasses } from '../core/t20.js';
 import { magoSpells, memorizationLimit, dayKey, validateStudy } from './grimorio-rules.js';
-import { toolFrame, onNavigate, reopen } from '../ui/frame.js';
+import { toolFrame, onNavigate, onTheme, reopen } from '../ui/frame.js';
 import { readGrimorio, isMago } from './grimorio-state.js';
 
 const ApplicationV2 = globalThis.foundry?.applications?.api?.ApplicationV2 ?? class {};
@@ -34,6 +34,7 @@ export class GrimorioApp extends ApplicationV2 {
       study: GrimorioApp.#onStudy,
       release: GrimorioApp.#onRelease,
       t20nav: onNavigate,
+      theme: onTheme,
       openSheet: GrimorioApp.#onOpenSheet,
       openBuscador: GrimorioApp.#onOpenBuscador
     }
