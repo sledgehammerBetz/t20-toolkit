@@ -16,6 +16,8 @@ import { fold } from '../core/t20.js';
 
 const SKILLS_ANY = null;
 const ELEMENTS = ['ácido', 'eletricidade', 'fogo', 'frio', 'luz', 'trevas'];
+const SEA_SONG = Object.freeze(['Amedrontar', 'Comando', 'Despedaçar', 'Enfeitiçar', 'Hipnotismo', 'Sono']);
+const FAIRY_MAGIC = Object.freeze(['Criar Ilusão', 'Enfeitiçar', 'Luz', 'Sono']);
 
 /** Chave = nome da habilidade racial (sem acento, minúsculo). */
 export const RACE_ABILITY_CHOICES = Object.freeze({
@@ -32,6 +34,8 @@ export const RACE_ABILITY_CHOICES = Object.freeze({
   'terror vivo': { text: 'Um poder da Tormenta (não conta para perda de Carisma).', slots: [{ kind: 'power', power: 'tormenta' }] },
   'deformidade': { text: '+2 em duas perícias (cada uma conta como poder da Tormenta). Pode trocar um bônus por um poder da Tormenta.', slots: [{ kind: 'note', label: '+2 em', skills: true }, { kind: 'bonusOrPower', power: 'tormenta' }] },
   'chassi mashin': { text: '+1 em dois atributos e duas perícias treinadas.', slots: [{ kind: 'attr' }, { kind: 'attr' }, { kind: 'skill' }, { kind: 'skill' }] },
+  'cancao dos mares': { text: 'Duas magias entre Amedrontar, Comando, Despedaçar, Enfeitiçar, Hipnotismo e Sono (atributo-chave Carisma; JdA p. 30).', slots: [{ kind: 'spell', names: SEA_SONG }, { kind: 'spell', names: SEA_SONG, distinct: true }] },
+  'magia das fadas': { text: 'Duas magias entre Criar Ilusão, Enfeitiçar, Luz (como magia arcana) e Sono (atributo-chave Carisma; JdA p. 30).', slots: [{ kind: 'spell', names: FAIRY_MAGIC }, { kind: 'spell', names: FAIRY_MAGIC, distinct: true }] },
   'tatuagem mistica': { text: 'Uma magia de 1º círculo (atributo-chave Carisma).', slots: [{ kind: 'spell' }] },
   'sagrada': { text: 'Uma magia divina de 1º círculo (atributo-chave Sabedoria).', slots: [{ kind: 'spell', type: 'div' }] },
   'sapiencia': { text: 'Uma magia de adivinhação de 1º círculo (atributo-chave Sabedoria).', slots: [{ kind: 'spell', school: 'adv' }] },
@@ -78,9 +82,9 @@ export const RACE_POOLS = Object.freeze({
     { id: 'natureza', label: 'Natureza', count: 1, min: 1, match: n => n.startsWith('natureza') },
     { id: 'presentes', label: 'Presentes', count: 3, min: 3, match: () => true }
   ] },
-  kallyanach: { race: 'kallyanach', levelUp: 'bencaos', pools: [{ id: 'bencaos', label: 'Bênçãos dracônicas', count: 2, min: 2, note: 'Confira no livro quantas bênçãos o mestre libera.', match: () => true }] },
+  kallyanach: { race: 'kallyanach', levelUp: 'bencaos', pools: [{ id: 'bencaos', label: 'Bênçãos dracônicas', count: 2, min: 2, note: 'Ameaças de Arton p. 151: escolha duas.', match: () => true }] },
   mashin: { race: 'mashin', levelUp: 'maravilha', pools: [{ id: 'maravilha', label: 'Maravilha mecânica', count: 1, min: 0, note: 'Opcional: substitui uma das perícias do Chassi.', match: () => true }] },
-  kobolds: { race: 'kobolds', levelUp: 'talentos', pools: [{ id: 'talentos', label: 'Talentos do bando', count: 2, min: 0, note: 'Confira no livro quantos talentos o bando recebe.', match: () => true }] }
+  kobolds: { race: 'kobolds', levelUp: 'talentos', pools: [{ id: 'talentos', label: 'Talentos do bando', count: 2, min: 2, note: 'Ameaças de Arton p. 183: escolham dois.', match: () => true }] }
 });
 
 /**
@@ -145,6 +149,10 @@ export function raceChoiceProblems(choices, picks = {}, pools = [], poolPicks = 
       const prev = picks[c.key]?.[i - 1]?.value;
       if (p.value && p.value === prev) { out.push(`${c.name}: atributos diferentes`); return; }
     }
+    if (s.kind === 'spell' && s.distinct) {
+      const prev = picks[c.key]?.[i - 1]?.value;
+      if (p.value && p.value === prev) { out.push(`${c.name}: magias diferentes`); return; }
+    }
     if (!p.value) out.push(c.name);
   });
   for (const pool of pools) {
@@ -174,6 +182,8 @@ export function powerGroupFilter(group) {
 
 /** Filtro de magias de 1º círculo da vaga. */
 export function spellSlotFilter(slot) {
+  const names = slot.names?.length ? new Set(slot.names.map(fold)) : null;
+  if (names) return s => names.has(fold(s.name));
   return s => s.circle === 1 && ['arc', 'div', 'uni'].includes(s.type)
     && (!slot.type || s.type === slot.type || s.type === 'uni') && (!slot.school || s.school === slot.school);
 }

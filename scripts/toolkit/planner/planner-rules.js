@@ -15,6 +15,13 @@ function entryFor(className) {
   return key ? PROGRESSION[key] : null;
 }
 
+/** Poderes da classe básica que a variante não pode escolher (Usurpador: HA p. 41). */
+export const EXCLUDED_CLASS_POWERS = Object.freeze({
+  usurpador: ['conhecimento magico']
+});
+
+export const excludedPower = (className, powerKey) => (EXCLUDED_CLASS_POWERS[fold(className)] ?? []).includes(powerKey);
+
 /** Tabela de níveis da classe (ou null). */
 export function progressionFor(className) {
   return entryFor(className)?.levels ?? null;

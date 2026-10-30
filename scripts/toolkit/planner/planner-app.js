@@ -16,7 +16,7 @@ import { classLevelMap, grantedAbilityKeys, CROSS_CLASS_SOURCES } from '../core/
 import { crossClassExtra } from '../core/caster-context.js';
 import { viaSlots, viaFlag, viaCtx, isAlmaLivrePick, almaLivre } from './cross-class.js';
 import { devotionCheck, mustBeDevout } from '../core/gods.js';
-import { BASE_CLASSES, progressionFor, classInfo, gainsAt, buildTimeline, prerequisiteText, evaluatePrerequisites } from './planner-rules.js';
+import { BASE_CLASSES, progressionFor, classInfo, gainsAt, buildTimeline, prerequisiteText, evaluatePrerequisites, excludedPower } from './planner-rules.js';
 import { toolFrame, onNavigate, switchTheme, reopen } from '../ui/frame.js';
 import { postCard } from '../ui/chat.js';
 import { disclosure } from '../ui/components.js';
@@ -143,7 +143,7 @@ export class PlannerApp extends ApplicationV2 {
     const key = fold(powerClass || cls);
     return {
       // "Aumento de Atributo" é poder de classe com subtipo "Geral": vale para qualquer classe.
-      cls: this.index.powers.filter(p => p.tipo === 'classe' && (p.subtipo === key || p.subtipo === 'geral')),
+      cls: this.index.powers.filter(p => p.tipo === 'classe' && (p.subtipo === key || p.subtipo === 'geral') && !excludedPower(cls, p.key)),
       general: this.index.powers.filter(p => p.tipo === 'geral'),
       distinction: getTableRules().distinctions ? this.index.powers.filter(p => p.tipo === 'distincao') : []
     };

@@ -82,8 +82,8 @@ export function testFormula(parts) {
   })].join(' ');
 }
 
-/** Chance (%) de tirar `dc` ou mais no d20 + bônus. */
-export const chanceOf = (dc, bonus) => Math.max(0, Math.min(20, 21 - (dc - bonus))) * 5;
+/** Chance (%) de tirar `dc` ou mais no d20 + bônus. 20 natural sempre passa e 1 natural sempre falha (JdA p. 221): 5% a 95%. */
+export const chanceOf = (dc, bonus) => Math.max(1, Math.min(19, 21 - (dc - bonus))) * 5;
 
 /** "Escolher 0" só vale quando o bônus é fixo e já alcança a CD. */
 export const canChooseZero = (dc, parts) => allFixed(parts) && fixedBonus(parts) >= dc;

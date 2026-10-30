@@ -187,6 +187,8 @@
 .t20tk-us-capture { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 var(--t20-pad) 14px; display: flex; flex-direction: column; gap: 10px; }
 .t20tk-us-capture > .t20tk-bz-note { margin: 0; }
 .t20tk-bz .t20tk-us-capture .t20tk-es-list { flex: 0 0 auto; padding: 0; overflow: visible; }
+.t20tk-us-repertoire { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.t20tk-us-repertoire small { opacity: .75; }
 .t20tk-us-capture > .t20tk-wz-field { flex: 0 0 auto; }
 .t20tk-us-desc { list-style: none; margin: -4px 0 6px; padding: 10px 14px; border: 1px solid var(--t20-border-subtle); border-top: 0; border-radius: 0 0 var(--t20-radius) var(--t20-radius); background: var(--t20-bg-surface-alt); }
 .t20tk-us-cast { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 var(--t20-pad) 14px; display: flex; flex-direction: column; gap: 10px; }

@@ -10,7 +10,7 @@
  *    cls, classOneOf: {i: nome}, classCraft, path,
  *    skillPicks: { class: [chave], race: [chave], int: [chave] }       ← grade única de perícias (antigos: classSkills/intSkills)
  *    complication, complicationPower,                                  ← Complicações (Heróis de Arton)
- *    god, godPower }
+ *    god, godPower, godPower2 (clérigo, druida e paladino recebem dois) }
  * As regras opcionais vêm de getTableRules() (janela Regras da mesa).
  */
 import { MODULE_ID } from '../../constants.js';
@@ -21,7 +21,7 @@ import { ATTRS, ATTR_LABELS, POINT_COST, stepPoint, validatePoints, parseClassSk
 import { ORIGINS } from './origins.js';
 import { ORIGIN_ITEMS, originItemChoices, weaponOptions, findGear } from './origin-items.js';
 import { gainsAt, classSkills, classInfo } from './planner-rules.js';
-import { devotionCheck, mustBeDevout } from '../core/gods.js';
+import { devotionCheck, mustBeDevout, grantedPowerCount } from '../core/gods.js';
 import { GRANTED_POWERS, POWER_ALIASES } from '../usurpador/usurpador-rules.js';
 import { raceAbilityChoices, racePools, raceSkillSlots, raceAttrBonus, raceChoiceProblems, powerGroupFilter } from './race-choices.js';
 import { skillPlan, keysForName } from './skill-plan.js';
@@ -145,7 +145,7 @@ export function fxUuids(idx, cr, rules = getTableRules(), info = raceInfo(idx, c
     S.picks.filter(x => x.startsWith('power:')).forEach(x => out.push(x.slice(6)));
     if (S.choice) out.push(S.choice);
   }
-  for (const u of [cr.path, cr.godPower, cr.complicationPower, cr.agePower]) if (u) out.push(u);
+  for (const u of [cr.path, cr.godPower, cr.godPower2, cr.complicationPower, cr.agePower]) if (u) out.push(u);
   return [...new Set(out.filter(Boolean))];
 }
 
@@ -263,8 +263,8 @@ export function chipField(field, options, current, { num = false } = {}) {
  * Vaga que abre o buscador do assistente (em vez de menu suspenso): mostra o escolhido e "Escolher…/Trocar…".
  * `pool` = grupo de poderes (veja powerGroupFilter) ou 'spell'; `type`/`school` filtram magias.
  */
-export function pickButton({ path, pool, title, item = null, type = '', school = '', asNote = false }) {
-  const attrs = `data-action="wzPickOpen" data-path="${escapeHtml(path)}" data-pool="${escapeHtml(pool)}" data-title="${escapeHtml(title)}" data-type="${escapeHtml(type)}" data-school="${escapeHtml(school)}"`;
+export function pickButton({ path, pool, title, item = null, type = '', school = '', names = [], asNote = false }) {
+  const attrs = `data-action="wzPickOpen" data-path="${escapeHtml(path)}" data-pool="${escapeHtml(pool)}" data-title="${escapeHtml(title)}" data-type="${escapeHtml(type)}" data-school="${escapeHtml(school)}" data-names="${escapeHtml(names.join('|'))}"`;
   return `<div class="t20tk-wz-pickslot ${item ? 'is-done' : ''}">${item ? `${item.img ? `<img src="${escapeHtml(item.img)}" alt="">` : '<span class="t20tk-wz-noimg">✦</span>'}<b>${escapeHtml(item.name)}</b>` : '<span class="t20tk-lv-empty">Não escolhido</span>'}${asNote && item ? '<small class="t20tk-bz-meta">anotada no chat, não vira magia na ficha</small>' : ''}
     <button type="button" class="t20tk-ui-button ${item ? '' : 't20tk-ui-button--primary'}" ${attrs}>${item ? 'Trocar…' : 'Escolher…'}</button></div>`;
 }
@@ -510,7 +510,11 @@ export function creationIssues(app, cr) {
   if (cr.god) {
     const r = devotionCheck({ god: cr.god, race: dv.race, classes: dv.classes, rules });
     if (r.level === 'block') push('god', `devoção a ${cr.god} não permitida`);
-    else if (!cr.godPower) push('god', 'poder concedido');
+    else {
+      const want = grantedPowerCount(cr.god, dv.classes);
+      const have = [cr.godPower, cr.godPower2].filter(Boolean).length;
+      if (have < want) push('god', want > 1 ? `${want - have} poder(es) concedido(s)` : 'poder concedido');
+    }
   }
   return out;
 }
@@ -694,7 +698,7 @@ export async function applyCreation(app) {
     const pathKey = PATH_KEY[fold(pathName).split(':').pop()?.trim()];
     const key = pathKey ?? KEY_BY_CLASS[cls?.key];
     if (key) update['system.attributes.conjuracao'] = key;
-    if (god && cr.godPower) queueFrom(cr.godPower);
+    if (god) for (const u of [cr.godPower, cr.godPower2].slice(0, grantedPowerCount(god, dvc.classes))) if (u) queueFrom(u);
     // 6) Complicação (+ poder geral) e idade (complicações de idade, poder de "Já Vi Coisas")
     if (rules.complications && cr.complication) {
       queueFrom(cr.complication);

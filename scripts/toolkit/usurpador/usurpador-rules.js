@@ -3,8 +3,9 @@
  * - Usurpar: lança qualquer magia divina de um círculo que acessa com Enganação CD 15 + custo em PM.
  *   Falhou: a magia é perdida e os PM são gastos. Não pode escolher 10. Sofre penalidade de armadura.
  *   −5 se houver símbolo sagrado visível.
- * - Poder Capturado (4º nível): 1 hora + Enganação CD 20 (+5 por uso adicional no mesmo dia). Falhou: perde 3 PM.
- *   Passou: conta como devoto do deus e recebe um poder concedido dele até o fim do dia ou o próximo uso.
+ * - Poder Capturado (4º nível): escolha um deus maior por nível e um poder concedido dele (repertório: um par por
+ *   nível de Usurpador a partir do 4º). Para usar: 1 hora + Enganação CD 20 (+5 por uso adicional no mesmo dia).
+ *   Falhou: perde 3 PM. Passou: conta como devoto do deus e recebe o poder até o fim do dia ou o próximo uso.
  * - Roubo Divino (20º nível): a cada 10 pontos no teste de Usurpar, −1 PM e +1 na CD da magia.
  */
 import * as ST from '../core/skill-test.js';
@@ -41,6 +42,11 @@ export const POWER_ALIASES = Object.freeze({
 
 export function usurpDC(spellCost, extraPM = 0) {
   return 15 + (Number(spellCost) || 0) + (Number(extraPM) || 0);
+}
+
+/** Vagas do repertório do Poder Capturado: um par deus + poder por nível de Usurpador, a partir do 4º. */
+export function repertoireSlots(level) {
+  return Math.max(0, (Number(level) || 0) - 3);
 }
 
 /** PM perdidos ao falhar no Poder Capturado. */
