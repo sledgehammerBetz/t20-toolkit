@@ -11,7 +11,7 @@ import { ORIGINS } from './origins.js';
 import { ORIGIN_ITEMS } from './origin-items.js';
 import { gainsAt, classSkills, classInfo, prerequisiteText } from './planner-rules.js';
 import { GENERAL_CATS, catOf } from './level-view.js';
-import { devotionCheck, mustBeDevout, DEVOTEES } from '../core/gods.js';
+import { devotionCheck, mustBeDevout, DEVOTEES, ALT_DEVOTIONS, altDevotionsFor, grantedPowerCount } from '../core/gods.js';
 import { GRANTED_POWERS, POWER_ALIASES } from '../usurpador/usurpador-rules.js';
 import { getTableRules, allowedAgeRules, remapRacial, racialModifiers } from '../core/table-rules.js';
 import { powerGroupFilter, spellSlotFilter } from './race-choices.js';
@@ -178,7 +178,7 @@ function stepRaceChoices(app, cr, rules, info) {
         case 'power': return `<div class="t20tk-wz-row"><span>Poder</span>${powerSel(slot.power)}</div>`;
         case 'spell': {
           const chosen = spells.find(x => x.uuid === p.value);
-          return `<div class="t20tk-wz-row"><span>Magia${slot.school ? ` (${SPELL_SCHOOLS[slot.school]})` : ''}</span>${pickButton({ path, pool: 'spell', title: `${c.name}: magia de 1º círculo`, item: chosen, type: slot.type ?? '', school: slot.school ?? '', asNote: !!slot.asNote })}</div>`;
+          return `<div class="t20tk-wz-row"><span>Magia${slot.school ? ` (${SPELL_SCHOOLS[slot.school]})` : ''}</span>${pickButton({ path, pool: 'spell', title: `${c.name}: ${slot.names ? 'magia da lista' : 'magia de 1º círculo'}`, item: chosen, type: slot.type ?? '', school: slot.school ?? '', names: slot.names ?? [], asNote: !!slot.asNote })}</div>`;
         }
         case 'attr': return `<div class="t20tk-wz-row"><span>+1 em atributo</span><small class="t20tk-bz-meta">escolha na etapa <b>Atributos</b> (entra direto no total)</small></div>`;
         case 'attrDyn': return `<div class="t20tk-wz-row"><span>+1 em atributo</span><small class="t20tk-bz-meta">já faz parte dos atributos à escolha da raça (etapa Atributos)</small></div>`;
@@ -409,22 +409,26 @@ function stepGod(app, cr, rules) {
   const required = mustBeDevout(dv.classes);
   if (dv.classes.some(c => fold(c.name) === 'usurpador')) return '<div class="t20tk-wz-page"><p class="t20tk-bz-note"><b>Inimigo dos Deuses:</b> o usurpador não pode ter devoção. Use o Usurpador para capturar poderes concedidos.</p></div>';
   const fg = fstate(app, 'god');
-  const gods = Object.keys(GRANTED_POWERS).filter(g => matches(app, 'god', g, '')
+  const gods = [...altDevotionsFor(dv.classes), ...Object.keys(GRANTED_POWERS)].filter(g => matches(app, 'god', g, '')
     && (!fg.only || devotionCheck({ god: g, race: dv.race, classes: dv.classes, rules }).level !== 'block'));
   const list = `<ul class="t20tk-wz-list">${gods.map(g => {
     const r = devotionCheck({ god: g, race: dv.race, classes: dv.classes, rules });
     const d = DEVOTEES[g];
-    const sub = d?.any ? 'Qualquer devoto' : d ? [...(d.races ?? []), ...(d.classes ?? [])].join(', ') : '';
+    const alt = ALT_DEVOTIONS[g];
+    const sub = alt ? `${alt.label}: sem deus` : d?.any ? 'Qualquer devoto' : d ? [...(d.races ?? []), ...(d.classes ?? [])].join(', ') : '';
     const tags = r.level === 'block' ? [{ text: 'não pode', tone: 'warn' }] : r.level === 'warn' ? [{ text: 'confira', tone: 'accent' }] : [];
-    return card({ name: g, sub, tags, selected: cr.god === g, value: g, kind: 'god', disabled: r.level === 'block', reason: r.reason });
+    return card({ name: alt ? alt.label : g, sub, tags, selected: cr.god === g, value: g, kind: 'god', disabled: r.level === 'block', reason: r.reason });
   }).join('')}</ul>`;
   let detail = '';
   if (cr.god) {
     const r = devotionCheck({ god: cr.god, race: dv.race, classes: dv.classes, rules });
     const opts = (GRANTED_POWERS[cr.god] ?? []).map(n => idx.powers.find(p => p.key === fold(POWER_ALIASES[n] ?? n))).filter(Boolean);
-    detail = `<div class="t20tk-wz-detail"><h4>${escapeHtml(cr.god)}</h4>${r.reason ? `<p class="${r.level === 'ok' ? 't20tk-bz-note' : 't20tk-bz-warn'}">${escapeHtml(r.reason)}</p>` : ''}
-      <p class="t20tk-eyebrow">Poder concedido</p><ul class="t20tk-wz-tiles">${opts.map(p => `<li><button type="button" class="t20tk-wz-tile ${cr.godPower === p.uuid ? 'is-on' : ''}" data-action="wzField" data-field="godPower" data-value="${p.uuid}"><b>${escapeHtml(p.name)}</b><small>${escapeHtml(strip(p.description).slice(0, 120))}…</small></button></li>`).join('')}</ul>
-      <p class="t20tk-bz-note">Ao se tornar devoto você segue as Obrigações & Restrições do deus.</p></div>`;
+    const want = grantedPowerCount(cr.god, dv.classes);
+    const picked = [cr.godPower, cr.godPower2].filter(Boolean);
+    const powersHtml = want ? `<p class="t20tk-eyebrow">${want > 1 ? `Poderes concedidos (escolha ${want})` : 'Poder concedido'}</p><ul class="t20tk-wz-tiles">${opts.map(p => `<li><button type="button" class="t20tk-wz-tile ${picked.includes(p.uuid) ? 'is-on' : ''}" data-action="wzGodPower" data-value="${p.uuid}"><b>${escapeHtml(p.name)}</b><small>${escapeHtml(strip(p.description).slice(0, 120))}…</small></button></li>`).join('')}</ul>
+      <p class="t20tk-bz-note">Ao se tornar devoto você segue as Obrigações & Restrições do deus.${want > 1 ? ' Como devoto de classe, você recebe dois poderes concedidos em vez de um.' : ''}</p>` : '';
+    detail = `<div class="t20tk-wz-detail"><h4>${escapeHtml(ALT_DEVOTIONS[cr.god]?.label ?? cr.god)}</h4>${r.reason ? `<p class="${r.level === 'ok' ? 't20tk-bz-note' : 't20tk-bz-warn'}">${escapeHtml(r.reason)}</p>` : ''}
+      ${powersHtml}</div>`;
   }
   const DEV = { both: 'Devoções Abertas: qualquer raça e classe.', race: 'Devoções Abertas: qualquer raça (vale a classe).', class: 'Devoções Abertas: qualquer classe (vale a raça).' };
   const hasDetail = !!cr.god;
@@ -447,13 +451,13 @@ function stepSummary(app, cr, rules, info, issues) {
   const age = ageFor(cr, rules);
   const pw = u => idx.powerByUuid.get(u)?.name;
   const fromChoices = info.choices.flatMap(c => c.slots.map((slot, i) => { const v = cr.raceChoices?.[c.key]?.[i] ?? {}; const isP = slot.kind === 'power' || (['skillOrPower', 'bonusOrPower'].includes(slot.kind) && v.mode === 'power'); return isP ? pw(v.value) : slot.kind === 'spell' ? (w.spells ?? []).find(x => x.uuid === v.value)?.name : null; })).filter(Boolean);
-  const powers = [pw(cr.path), ...info.poolChosen.map(p => p.name), ...fromChoices, cr.godPower && pw(cr.godPower), cr.complication && pw(cr.complication), cr.complicationPower && pw(cr.complicationPower)].filter(Boolean);
+  const powers = [pw(cr.path), ...info.poolChosen.map(p => p.name), ...fromChoices, cr.godPower && pw(cr.godPower), cr.godPower2 && pw(cr.godPower2), cr.complication && pw(cr.complication), cr.complicationPower && pw(cr.complicationPower)].filter(Boolean);
   const row = (k, v) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v || '—')}</dd></div>`;
   return `<div class="t20tk-wz-page"><dl class="t20tk-wz-summary">
     ${row('Raça', info.race?.name)}${row('Atributos', ATTRS.map(a => `${a.toUpperCase()} ${sign(finals[a]) || '0'}`).join(' · '))}
     ${age.label ? row('Idade', age.label) : ''}
     ${row(slots.length > 1 ? 'Origens' : 'Origem', slots.map(k => originSlot(cr, k).origin).filter(Boolean).join(' / ') || (slots.length ? '' : 'sem origem'))}
-    ${row('Classe', cls?.name)}${row('Perícias', skills.join(', '))}${row('Poderes', powers.join(', '))}${row('Divindade', cr.god)}
+    ${row('Classe', cls?.name)}${row('Perícias', skills.join(', '))}${row('Poderes', powers.join(', '))}${row('Divindade', ALT_DEVOTIONS[cr.god]?.label ?? cr.god)}
   </dl>
   ${issues.length ? `<div class="t20tk-wz-issues"><b>Ainda falta</b><ul>${issues.map(i => `<li><button type="button" class="t20tk-bz-link" data-action="wzStep" data-step="${i.step}">${escapeHtml(i.text)}</button></li>`).join('')}</ul></div>` : '<p class="t20tk-bz-note">Tudo pronto. Se a raça tiver atributos à escolha, o sistema pergunta ao criar.</p>'}</div>`;
 }
@@ -474,7 +478,7 @@ function renderPicker(app, cr) {
   const text = p => strip(p.description).replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, '$1');
   let filters = '', list, count;
   if (pk.pool === 'spell') {
-    const all = (w.spells ?? []).filter(spellSlotFilter({ type: pk.type || undefined, school: pk.school || undefined }));
+    const all = (w.spells ?? []).filter(spellSlotFilter({ type: pk.type || undefined, school: pk.school || undefined, names: pk.names ? pk.names.split('|') : null }));
     const rows = all.filter(s => (!q || s.key.includes(q)) && (!f.type || s.type === f.type) && (!f.school || s.school === f.school));
     const types = [...new Set(all.map(s => s.type))].filter(t => SPELL_TYPES[t]);
     const schools = [...new Set(all.map(s => s.school))].filter(Boolean).sort();
@@ -610,7 +614,7 @@ export const WIZARD_ACTIONS = {
     }
     if (kind === 'race') await patch(this, { race: value, '-=raceMap': null, '-=raceChoices': null, '-=racePool': null });
     else if (kind === 'class') await patch(this, { cls: value, path: '', '-=classOneOf': null, classCraft: '', '-=skillPicks': null, complication: '', complicationPower: '' });
-    else if (kind === 'god') await patch(this, { god: value, godPower: '' });
+    else if (kind === 'god') await patch(this, { god: value, godPower: '', godPower2: '' });
     else if (kind === 'complication') {
       const changed = readCreation(this.actor).complication !== value;
       await patch(this, changed ? { complication: value, complicationPower: '' } : { complication: value });
@@ -632,7 +636,7 @@ export const WIZARD_ACTIONS = {
     const { kind } = target.dataset;
     if (kind === 'race') await patch(this, { race: '', '-=raceChoices': null, '-=racePool': null });
     else if (kind === 'class') await patch(this, { cls: '', path: '', '-=skillPicks': null });
-    else if (kind === 'god') await patch(this, { god: '', godPower: '' });
+    else if (kind === 'god') await patch(this, { god: '', godPower: '', godPower2: '' });
     else if (kind === 'complication') { await patch(this, { complication: '', complicationPower: '' }); wizardState(this).view.comp = 'list'; wizardState(this).compTab = 'comp'; return this.render(); }
     else if (kind === 'complicationPower') { await patch(this, { complicationPower: '' }); wizardState(this).view.compPower = 'list'; return this.render(); }
     else if (kind.startsWith('origin:')) { const P = slotPaths(Number(kind.split(':')[1])); await patch(this, { [P.origin]: '', [P.picks]: [] }); }
@@ -656,9 +660,9 @@ export const WIZARD_ACTIONS = {
   wzCompTab(event, target) { wizardState(this).compTab = target.dataset.value; this.render(); },
   async wzPickOpen(event, target) {
     const w = wizardState(this);
-    const { path, pool, title, type, school } = target.dataset;
+    const { path, pool, title, type, school, names } = target.dataset;
     if (pool === 'spell') await ensureSpells(this);
-    w.pick = { step: w.step, path, pool, title, type, school };
+    w.pick = { step: w.step, path, pool, title, type, school, names };
     w.f.pick = {};
     w.q.pick = '';
     this.render();
@@ -687,6 +691,16 @@ export const WIZARD_ACTIONS = {
     await patch(this, { ageComps: next });
   },
   wzSlot(event, target) { wizardState(this).slot = Number(target.dataset.value); this.render(); },
+  /** Poder concedido: alterna; com dois (clérigo, druida, paladino) preenche a vaga livre. */
+  async wzGodPower(event, target) {
+    const cr = readCreation(this.actor);
+    const v = target.dataset.value;
+    const want = grantedPowerCount(cr.god, devotionContext(this, cr).classes);
+    if (cr.godPower === v) return patch(this, { godPower: cr.godPower2 ?? '', godPower2: '' });
+    if (cr.godPower2 === v) return patch(this, { godPower2: '' });
+    if (!cr.godPower || want < 2) return patch(this, { godPower: v, godPower2: want < 2 ? '' : (cr.godPower2 ?? '') });
+    return patch(this, { godPower2: v });
+  },
   async wzField(event, target) {
     const { field, value } = target.dataset;
     const cur = readCreation(this.actor)[field];

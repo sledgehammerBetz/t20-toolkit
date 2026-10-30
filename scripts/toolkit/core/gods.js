@@ -9,6 +9,9 @@
  *   'class' — qualquer classe: a classe deixa de contar e a RAÇA precisa estar na lista (humano: qualquer deus);
  *   'both'  — qualquer personagem, qualquer deus.
  * Variantes de classe contam como a classe base (ex.: Necromante → Arcanista).
+ * Classes devotas (JdA p. 57, 61 e 82): recebem dois poderes concedidos; druida e paladino só seguem os deuses
+ * da sua lista; clérigo pode cultuar o Panteão, paladino pode ser paladino do bem e druida pode ser druida de Arton
+ * (Deuses de Arton p. 27), sem poder concedido. Devoções Abertas (qualquer classe) tira a lista da classe.
  */
 import { fold } from './t20.js';
 
@@ -39,6 +42,34 @@ export const DEVOTEES = Object.freeze({
 export const CORE_RACES = Object.freeze(['Humano', 'Anão', 'Dahllan', 'Elfo', 'Goblin', 'Lefou', 'Minotauro', 'Qareen', 'Golem', 'Hynne', 'Kliren', 'Medusa', 'Osteon', 'Sereia/Tritão', 'Sílfide', 'Aggelus', 'Sulfure', 'Trog']);
 export const MUST_BE_DEVOUT = Object.freeze(['Clérigo', 'Druida', 'Paladino']);
 
+/** Deuses que a classe pode seguir (Druida: JdA p. 61 + Deuses de Arton p. 24-26; Paladino: JdA p. 82). */
+export const CLASS_GODS = Object.freeze({
+  'Druida': ['Allihanna', 'Megalokk', 'Oceano', 'Aharadak', 'Tenebra'],
+  'Paladino': ['Azgher', 'Khalmyr', 'Lena', 'Lin-Wu', 'Marah', 'Tanna-Toh', 'Thyatis', 'Valkaria']
+});
+
+/** Devoções sem deus: contam como devoção, mas não dão poder concedido. */
+export const ALT_DEVOTIONS = Object.freeze({
+  'Panteão': { cls: 'Clérigo', label: 'Cultuar o Panteão', note: 'Sem poder concedido. Única obrigação: não usar armas cortantes ou perfurantes. Arma preferida: maça (JdA p. 57).' },
+  'Bem': { cls: 'Paladino', label: 'Paladino do bem', note: 'Sem poder concedido e sem Obrigações & Restrições além do Código do Herói (JdA p. 82).' },
+  'Arton': { cls: 'Druida', label: 'Druida de Arton', note: 'Sem poder concedido. Nunca matar ou destruir seres que não ameacem a sobrevivência sua ou dos aliados. Arma preferida: foice (Deuses de Arton p. 27).' }
+});
+
+const classNames = classes => classes.flatMap(c => [c.name, c.variantOf].filter(Boolean)).map(fold);
+
+/** Devoções sem deus que as classes permitem. */
+export function altDevotionsFor(classes = []) {
+  const names = classNames(classes);
+  return Object.keys(ALT_DEVOTIONS).filter(k => names.includes(fold(ALT_DEVOTIONS[k].cls)));
+}
+
+/** Quantos poderes concedidos a devoção dá: 0 sem deus, 2 para clérigo/druida/paladino, 1 para os outros. */
+export function grantedPowerCount(god, classes = []) {
+  if (!god || ALT_DEVOTIONS[god]) return 0;
+  const names = classNames(classes);
+  return MUST_BE_DEVOUT.some(c => names.includes(fold(c))) ? 2 : 1;
+}
+
 /**
  * @param {object} p
  * @param {string} p.god
@@ -49,11 +80,23 @@ export const MUST_BE_DEVOUT = Object.freeze(['Clérigo', 'Druida', 'Paladino']);
 export function devotionCheck({ god, race = '', classes = [], rules = null }) {
   const g = DEVOTEES[god];
   if (!god) return { ok: true, level: 'ok', reason: '' };
+  const alt = ALT_DEVOTIONS[god];
+  if (alt) {
+    return classNames(classes).includes(fold(alt.cls))
+      ? { ok: true, level: 'ok', reason: `${alt.label}: ${alt.note}` }
+      : { ok: false, level: 'block', reason: `${alt.label} é só para ${alt.cls.toLowerCase()}.` };
+  }
   if (!g) return { ok: true, level: 'warn', reason: `${god} não está na tabela do livro básico: confira com o mestre.` };
-  const names = classes.flatMap(c => [c.name, c.variantOf].filter(Boolean)).map(fold);
+  const names = classNames(classes);
   if (names.includes(fold('Usurpador'))) return { ok: false, level: 'block', reason: 'Usurpador (Inimigo dos Deuses) não pode ter devoção.' };
   const mode = rules?.openDevotions === true ? 'both' : (rules?.openDevotions || 'off');
   if (mode === 'both') return { ok: true, level: 'ok', reason: 'Devoções Abertas (regra da mesa): qualquer personagem pode ser devoto.' };
+  // A classe devota restringe o deus, a menos que a mesa abra a devoção por classe.
+  if (mode !== 'class') {
+    for (const [cls, gods] of Object.entries(CLASS_GODS)) {
+      if (names.includes(fold(cls)) && !gods.includes(god)) return { ok: false, level: 'block', reason: `${cls} só pode ser devoto de ${gods.join(', ')}.` };
+    }
+  }
   if (g.any) return { ok: true, level: g.note && god === 'Thwor' ? 'warn' : 'ok', reason: g.note ?? '' };
   const raceCheck = () => {
     if (fold(race) === fold('Humano')) return { ok: true, level: 'ok', reason: 'Humanos podem ser devotos de qualquer deus.' };
@@ -76,6 +119,6 @@ export function devotionCheck({ god, race = '', classes = [], rules = null }) {
 /** Classe que obriga a ser devoto (clérigo, druida, paladino — e as variantes delas). */
 export function mustBeDevout(classes = []) {
   if (classes.some(c => fold(c.name) === fold('Usurpador'))) return null;
-  const names = classes.flatMap(c => [c.name, c.variantOf].filter(Boolean)).map(fold);
+  const names = classNames(classes);
   return MUST_BE_DEVOUT.find(c => names.includes(fold(c))) ?? null;
 }
