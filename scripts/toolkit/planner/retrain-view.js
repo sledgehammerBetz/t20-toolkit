@@ -10,6 +10,7 @@ import { prerequisiteText, evaluatePrerequisites } from './planner-rules.js';
 import { getTableRules, retrainStatus } from '../core/table-rules.js';
 import { postCard } from '../ui/chat.js';
 import { powerCard, chipRow, toggleRow, bf, catOf, GENERAL_CATS } from './level-view.js';
+import { canRedo } from './retro-view.js';
 
 const SWAPPABLE = ['classe', 'geral', 'distincao', 'concedido', 'origem'];
 const TIPO_LABEL = { classe: 'Poder de classe', geral: 'Poder geral', distincao: 'Distinção', concedido: 'Poder concedido', origem: 'Poder de origem', ability: 'Habilidade de classe', racial: 'Habilidade racial', complicacao: 'Complicação' };
@@ -66,15 +67,16 @@ export function renderDoneLevel(app) {
   const log = (app.actor?.getFlag?.(MODULE_ID, 'retrains') ?? []).filter(r => r.level === level);
   const logHtml = log.length ? `<ul class="t20tk-rt-log">${log.map(r => `<li><b>${escapeHtml(r.from)}</b> → <b>${escapeHtml(r.to)}</b> <small>no ${r.at}º nível${r.by ? ` · ${escapeHtml(r.by)}` : ''}</small></li>`).join('')}</ul>` : '';
 
-  const canUndo = level === c.current && h;
+  const canUndo = level === c.current && h && !h.retro;
+  const redo = app.actor?.isOwner && canRedo(c, level);
   const footer = `<footer class="t20tk-wz-foot t20tk-lv-foot">
-    ${canUndo ? `<button type="button" class="t20tk-ui-button" data-action="undo" data-level="${level}">Desfazer este nível</button>` : '<span></span>'}
+    ${canUndo ? `<button type="button" class="t20tk-ui-button" data-action="undo" data-level="${level}">Desfazer este nível</button>` : redo ? `<button type="button" class="t20tk-ui-button" data-action="rtrUndo" data-level="${level}">Refazer registro</button>` : '<span></span>'}
     ${c.current < 20 ? `<button type="button" class="t20tk-ui-button t20tk-ui-button--primary" data-action="pickLevel" data-level="${c.current + 1}">Ir para o ${c.current + 1}º nível →</button>` : '<span></span>'}
   </footer>`;
 
   return `<div class="t20tk-lv-page">
     <h3 class="t20tk-lv-title">${level}º nível de personagem <span class="t20tk-rt-badge">na ficha</span></h3>
-    <section class="t20tk-wz-box"><header><b>${h?.creation ? 'Criação do personagem' : cls ? `${escapeHtml(cls)}` : 'O que entrou neste nível'}</b><small>${canUndo ? 'Último nível aplicado: dá para desfazer.' : 'Itens adicionados à ficha neste nível.'}</small></header>${gained}</section>
+    <section class="t20tk-wz-box"><header><b>${h?.creation ? 'Criação do personagem' : cls ? `${escapeHtml(cls)}` : 'O que entrou neste nível'}</b><small>${canUndo ? 'Último nível aplicado: dá para desfazer.' : h?.retro ? 'Registrado depois: o nível foi feito fora do Planejador.' : 'Itens adicionados à ficha neste nível.'}</small></header>${gained}</section>
     <section class="t20tk-wz-box t20tk-rt"><header><b>Retreino</b><small>${escapeHtml(st.reason)}</small></header>
       ${st.allowed ? '<p class="t20tk-bz-note">Clique em <b>Retreinar…</b> num poder para trocá-lo por outro que você cumpra os pré-requisitos neste nível.</p>' : `<p class="t20tk-bz-note">${st.mode === 'off' ? 'O mestre pode ligar o retreino nas Regras da mesa (Progressão → Retreino).' : ''}</p>`}
       ${logHtml}</section>
