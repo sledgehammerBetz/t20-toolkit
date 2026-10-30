@@ -17,7 +17,7 @@ import { crossClassExtra } from '../core/caster-context.js';
 import { viaSlots, viaFlag, viaCtx, isAlmaLivrePick, almaLivre } from './cross-class.js';
 import { devotionCheck, mustBeDevout } from '../core/gods.js';
 import { BASE_CLASSES, progressionFor, classInfo, gainsAt, buildTimeline, evaluatePower, excludedPower } from './planner-rules.js';
-import { toolFrame, onNavigate, switchTheme, reopen } from '../ui/frame.js';
+import { toolFrame, onNavigate, reopen } from '../ui/frame.js';
 import { postCard } from '../ui/chat.js';
 import { disclosure } from '../ui/components.js';
 import { getTableRules } from '../core/table-rules.js';
@@ -52,7 +52,6 @@ export class PlannerApp extends ApplicationV2 {
       removeExtra: inBatch(PlannerApp.#onRemoveExtra),
       applyCreation: inBatch(PlannerApp.#onApplyCreation),
       openBuscador: PlannerApp.#onOpenBuscador,
-      theme: PlannerApp.#onTheme,
       t20nav: onNavigate,
       openSheet: PlannerApp.#onOpenSheet,
       ...WIZARD_ACTIONS,
@@ -483,7 +482,6 @@ export class PlannerApp extends ApplicationV2 {
 
   static #onOpenBuscador() { game.t20Toolkit?.buscador?.open({ actor: this.actor }); }
   static async #onAttrStep(event, target) { await stepCreationAttribute(this, target.dataset.attr, target.dataset.delta); }
-  static async #onTheme(event, target) { await switchTheme(target.dataset.themeValue); }
   static #onOpenSheet() { this.actor?.sheet?.render(true); }
 }
 

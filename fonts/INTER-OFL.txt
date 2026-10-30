@@ -1,2 +1,0 @@
-Inter — Copyright 2016-2023 The Inter Project Authors (https://github.com/rsms/inter)
-Licensed under the SIL Open Font License, Version 1.1 (texto completo em LORA-OFL.txt). Arquivos reduzidos ao alfabeto latino.

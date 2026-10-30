@@ -153,7 +153,7 @@ export function renderLevelEditor(app) {
   const sheet = c.classes;
   const chosenOther = entry.cls && !sheet.some(x => fold(x.name) === fold(entry.cls)) ? entry.cls : null;
   const clsCard = (name, sub, img) => `<button type="button" class="t20tk-lv-class ${fold(entry.cls ?? '') === fold(name) ? 'is-on' : ''}" data-action="lvClass" data-value="${escapeHtml(name)}">
-      ${img ? `<img src="${escapeHtml(img)}" alt="">` : '<span class="t20tk-wz-noimg">✦</span>'}<span><b>${escapeHtml(name)}</b><small>${escapeHtml(sub)}</small></span></button>`;
+      ${img ? `<img src="${escapeHtml(img)}" alt="">` : '<span class="t20tk-wz-noimg"><i class="fa-solid fa-star" inert></i></span>'}<span><b>${escapeHtml(name)}</b><small>${escapeHtml(sub)}</small></span></button>`;
   const imgOf = name => app.index.classes.find(x => x.key === fold(name))?.img;
   const classes = `<section class="t20tk-wz-box"><header><b>Classe deste nível</b><small>Continue numa classe da ficha ou entre numa nova (multiclasse).</small></header>
     <div class="t20tk-lv-classes">
@@ -186,7 +186,7 @@ export function powerCard(app, p, ctx, { action = '', gain = '', selected = fals
   const prereq = ev.parts.length ? `<span class="t20tk-lv-prereq">${ev.parts.map(x => `<i data-ok="${x.ok}">${x.ok === true ? '✔' : x.ok === false ? '✘' : '?'} ${escapeHtml(x.text)}</i>`).join('')}</span>` : '';
   const sub = strip(p.description).replace(/Pr[ée]-?requisitos?:.*$/i, '').slice(0, 150);
   return `<li class="t20tk-wz-card ${selected ? 'is-selected' : ''} ${owned || taken ? 'is-off' : ''}" data-status="${ev.status}">
-    ${p.img ? `<img src="${escapeHtml(p.img)}" alt="" loading="lazy">` : '<span class="t20tk-wz-noimg">✦</span>'}
+    ${p.img ? `<img src="${escapeHtml(p.img)}" alt="" loading="lazy">` : '<span class="t20tk-wz-noimg"><i class="fa-solid fa-star" inert></i></span>'}
     <span class="t20tk-wz-copy"><b>${escapeHtml(p.name)}</b><small title="${escapeHtml(strip(p.description))}">${escapeHtml(sub)}${sub.length >= 150 ? '…' : ''}</small>
       <span class="t20tk-wz-tags"><i data-tone="${ev.status === 'missing' ? 'warn' : ev.status === 'ok' ? 'ok' : ''}">${mark} ${label}</i>${p.subtipo ? `<i>${escapeHtml(p.subtipo)}</i>` : ''}${owned ? '<i data-tone="warn">já tem</i>' : ''}${takenLabel ? `<i data-tone="warn">${escapeHtml(takenLabel)}</i>` : ''}${p.tipo === 'distincao' ? '<i data-tone="accent">distinção</i>' : ''}</span>${prereq}</span>
     ${action ? `<button type="button" class="t20tk-ui-button ${selected ? 't20tk-ui-button--primary' : ''}" data-action="${action}" data-gain="${gain}" data-value="${p.uuid}" ${(owned || taken) && !selected ? 'disabled' : ''}>${selected ? 'Selecionado' : 'Selecionar'}</button>` : ''}
@@ -198,9 +198,9 @@ function renderGain(app, gain, row, entry, ctx) {
   if (gain.kind === 'ability') {
     const found = app.findAbility(row.cls, gain.item);
     const owned = app.ownsPower(gain.item);
-    return `<div class="t20tk-lv-gain" data-kind="ability">${found?.img ? `<img src="${escapeHtml(found.img)}" alt="">` : '<span class="t20tk-wz-noimg">◆</span>'}<span><small>Habilidade de classe</small><b>${escapeHtml(gain.item)}</b><em>${owned ? 'já está na ficha (melhora sozinha)' : found ? 'entra ao aplicar' : 'não está no compêndio'}</em></span></div>`;
+    return `<div class="t20tk-lv-gain" data-kind="ability">${found?.img ? `<img src="${escapeHtml(found.img)}" alt="">` : '<span class="t20tk-wz-noimg"><i class="fa-solid fa-diamond" inert></i></span>'}<span><small>Habilidade de classe</small><b>${escapeHtml(gain.item)}</b><em>${owned ? 'já está na ficha (melhora sozinha)' : found ? 'entra ao aplicar' : 'não está no compêndio'}</em></span></div>`;
   }
-  if (gain.kind === 'spells') return `<div class="t20tk-lv-gain" data-kind="spells"><span class="t20tk-wz-noimg">✦</span><span><small>Magias</small><b>${escapeHtml(gain.label)}</b><em>escolha no Buscador depois de aplicar</em></span></div>`;
+  if (gain.kind === 'spells') return `<div class="t20tk-lv-gain" data-kind="spells"><span class="t20tk-wz-noimg"><i class="fa-solid fa-star" inert></i></span><span><small>Magias</small><b>${escapeHtml(gain.label)}</b><em>escolha no Buscador depois de aplicar</em></span></div>`;
   if (gain.kind === 'note') return `<div class="t20tk-lv-gain" data-kind="note"><span class="t20tk-wz-noimg">!</span><span><small>Habilidade</small><b>${escapeHtml(gain.label)}</b><em>${app.ownsPower(gain.label) ? 'já está na ficha' : 'adicione pela ficha (não está no compêndio)'}</em></span></div>`;
   if (gain.kind === 'path') {
     const options = gain.options.map(n => app.index.powers.find(p => p.name === n)).filter(Boolean);
@@ -260,7 +260,7 @@ function renderBrowser(app, row) {
     list = rows.map(x => {
       const tags = [x.packLabel, classInfo(x.name)?.variantOf ? `variante de ${classInfo(x.name).variantOf}` : '', known.has(x.key) ? '' : 'progressão manual'].filter(Boolean);
       const sel = fold(entry.cls ?? '') === x.key;
-      return `<li class="t20tk-wz-card ${sel ? 'is-selected' : ''}">${x.img ? `<img src="${escapeHtml(x.img)}" alt="" loading="lazy">` : '<span class="t20tk-wz-noimg">✦</span>'}
+      return `<li class="t20tk-wz-card ${sel ? 'is-selected' : ''}">${x.img ? `<img src="${escapeHtml(x.img)}" alt="" loading="lazy">` : '<span class="t20tk-wz-noimg"><i class="fa-solid fa-star" inert></i></span>'}
         <span class="t20tk-wz-copy"><b>${escapeHtml(x.name)}</b><small>PV ${x.pv ?? '?'} · PM ${x.pm ?? '?'} por nível</small><span class="t20tk-wz-tags">${tags.map(t => `<i>${escapeHtml(t)}</i>`).join('')}</span></span>
         <button type="button" class="t20tk-ui-button ${sel ? 't20tk-ui-button--primary' : ''}" data-action="lvClass" data-value="${escapeHtml(x.name)}">${sel ? 'Selecionado' : 'Selecionar'}</button></li>`;
     }).join('');
@@ -325,12 +325,12 @@ function renderBrowser(app, row) {
 /* ---------- ganhos fora da progressão: página própria ---------- */
 
 const XG_TYPES = [
-  { v: 'geral', icon: '✦', label: 'Poder geral', hint: 'combate, destino, magia, Tormenta…' },
-  { v: 'classe', icon: '◆', label: 'Poder de classe', hint: 'de qualquer classe' },
-  { v: 'concedido', icon: '☀', label: 'Poder concedido', hint: 'dado por um deus' },
-  { v: 'distincao', icon: '♛', label: 'Distinção', hint: 'admissão combinada com o mestre', needs: 'distinctions' },
-  { v: 'pericia', icon: '✎', label: 'Perícia treinada', hint: 'uma perícia nova' },
-  { v: 'atributo', icon: '▲', label: '+1 em atributo', hint: 'soma 1 no valor base' }
+  { v: 'geral', icon: 'fa-star', label: 'Poder geral', hint: 'combate, destino, magia, Tormenta…' },
+  { v: 'classe', icon: 'fa-diamond', label: 'Poder de classe', hint: 'de qualquer classe' },
+  { v: 'concedido', icon: 'fa-sun', label: 'Poder concedido', hint: 'dado por um deus' },
+  { v: 'distincao', icon: 'fa-crown', label: 'Distinção', hint: 'admissão combinada com o mestre', needs: 'distinctions' },
+  { v: 'pericia', icon: 'fa-pen', label: 'Perícia treinada', hint: 'uma perícia nova' },
+  { v: 'atributo', icon: 'fa-arrow-up', label: '+1 em atributo', hint: 'soma 1 no valor base' }
 ];
 
 export function renderExtraPage(app) {
@@ -343,7 +343,7 @@ export function renderExtraPage(app) {
   const type = XG_TYPES.find(t => t.v === x.type) ?? XG_TYPES[0];
   const done = list.length
     ? `<ul class="t20tk-xg-list">${list.map((g, i) => `<li class="t20tk-xg-item">
-        ${g.img ? `<img src="${escapeHtml(g.img)}" alt="">` : `<span class="t20tk-wz-noimg">${XG_TYPES.find(t => t.v === g.type)?.icon ?? '+'}</span>`}
+        ${g.img ? `<img src="${escapeHtml(g.img)}" alt="">` : `<span class="t20tk-wz-noimg"><i class="fa-solid ${XG_TYPES.find(t => t.v === g.type)?.icon ?? 'fa-plus'}" inert></i></span>`}
         <span class="t20tk-xg-copy"><small>${escapeHtml(g.kindLabel ?? '')}</small><b>${escapeHtml(g.label)}</b>
           <em>${[g.level ? `${g.level}º nível` : '', g.by ? `por ${g.by}` : ''].filter(Boolean).map(escapeHtml).join(' · ')}</em>
           ${g.reason ? `<q>${escapeHtml(g.reason)}</q>` : ''}</span>
@@ -353,7 +353,7 @@ export function renderExtraPage(app) {
   let form = '';
   if (can) {
     const types = XG_TYPES.filter(t => !t.needs || getTableRules()[t.needs]).map(t => `<button type="button" class="t20tk-xg-type ${x.type === t.v ? 'is-on' : ''}" data-action="lvExtraType" data-value="${t.v}" aria-pressed="${x.type === t.v}">
-        <span aria-hidden="true">${t.icon}</span><b>${t.label}</b><small>${t.hint}</small></button>`).join('');
+        <i class="fa-solid ${t.icon}" aria-hidden="true"></i><b>${t.label}</b><small>${t.hint}</small></button>`).join('');
     let pick;
     if (x.type === 'pericia') {
       const labels = skillLabels();
@@ -369,7 +369,7 @@ export function renderExtraPage(app) {
       const sources = x.type === 'classe' ? sheetGrantSources(app.actor) : [];
       const viaRow = sources.length ? `<div class="t20tk-wz-field"><span>Pelo poder (outra classe)</span><div class="t20tk-wz-chips">${[['', 'Nenhum'], ...sources.map(s => [s.key, s.def.name])].map(([v, l]) => `<button type="button" class="t20tk-chip ${(x.via ?? '') === v ? 'is-on' : ''}" data-action="lvExtraVia" data-value="${escapeHtml(v)}">${escapeHtml(l)}</button>`).join('')}</div></div>` : '';
       pick = viaRow + (chosen
-        ? `<div class="t20tk-lv-gain" data-kind="power">${chosen.img ? `<img src="${escapeHtml(chosen.img)}" alt="">` : '<span class="t20tk-wz-noimg">✦</span>'}<span><small>${escapeHtml(type.label)}</small><b>${escapeHtml(chosen.name)}</b><em>${escapeHtml(strip(chosen.description).slice(0, 120))}…</em></span><button type="button" class="t20tk-ui-button" data-action="lvBrowse" data-kind="extra">Trocar…</button></div>`
+        ? `<div class="t20tk-lv-gain" data-kind="power">${chosen.img ? `<img src="${escapeHtml(chosen.img)}" alt="">` : '<span class="t20tk-wz-noimg"><i class="fa-solid fa-star" inert></i></span>'}<span><small>${escapeHtml(type.label)}</small><b>${escapeHtml(chosen.name)}</b><em>${escapeHtml(strip(chosen.description).slice(0, 120))}…</em></span><button type="button" class="t20tk-ui-button" data-action="lvBrowse" data-kind="extra">Trocar…</button></div>`
         : `<button type="button" class="t20tk-xg-choose" data-action="lvBrowse" data-kind="extra"><b>Escolher ${escapeHtml(type.label.toLowerCase())}…</b><small>abre a lista com busca e filtros</small></button>`);
     }
     const label = x.type === 'pericia' ? skillLabels()[x.value] : x.type === 'atributo' ? (x.value ? `+1 em ${x.value.toUpperCase()}` : '') : app.index.powerByUuid.get(x.value)?.name;

@@ -273,7 +273,7 @@ export function chipField(field, options, current, { num = false } = {}) {
  */
 export function pickButton({ path, pool, title, item = null, type = '', school = '', names = [], asNote = false }) {
   const attrs = `data-action="wzPickOpen" data-path="${escapeHtml(path)}" data-pool="${escapeHtml(pool)}" data-title="${escapeHtml(title)}" data-type="${escapeHtml(type)}" data-school="${escapeHtml(school)}" data-names="${escapeHtml(names.join('|'))}"`;
-  return `<div class="t20tk-wz-pickslot ${item ? 'is-done' : ''}">${item ? `${item.img ? `<img src="${escapeHtml(item.img)}" alt="">` : '<span class="t20tk-wz-noimg">✦</span>'}<b>${escapeHtml(item.name)}</b>` : '<span class="t20tk-lv-empty">Não escolhido</span>'}${asNote && item ? '<small class="t20tk-bz-meta">anotada no chat, não vira magia na ficha</small>' : ''}
+  return `<div class="t20tk-wz-pickslot ${item ? 'is-done' : ''}">${item ? `${item.img ? `<img src="${escapeHtml(item.img)}" alt="">` : '<span class="t20tk-wz-noimg"><i class="fa-solid fa-star" inert></i></span>'}<b>${escapeHtml(item.name)}</b>` : '<span class="t20tk-lv-empty">Não escolhido</span>'}${asNote && item ? '<small class="t20tk-bz-meta">anotada no chat, não vira magia na ficha</small>' : ''}
     <button type="button" class="t20tk-ui-button ${item ? '' : 't20tk-ui-button--primary'}" ${attrs}>${item ? 'Trocar…' : 'Escolher…'}</button></div>`;
 }
 export const sign = n => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n)}`;

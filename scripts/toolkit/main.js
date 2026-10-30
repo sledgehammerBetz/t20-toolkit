@@ -12,8 +12,6 @@ import { migrateLegacyWorldSettings, LEGACY_MODULE_ID } from './core/settings-mi
 
 import { renderToolkitHub } from './ui/hub-view.js';
 import { installErrorLog, registerBetaSettings, openReport, diagnostics, errorLog, betaWelcome } from './beta.js';
-import { paintTheme } from './ui/frame.js';
-import { registerToolkitThemeSetting, getToolkitTheme, setToolkitTheme, applyToolkitTheme } from './ui/theme-controller.js';
 
 /**
  * As janelas só são carregadas quando alguém abre a ferramenta: quem entra no mundo baixa só o necessário
@@ -74,21 +72,6 @@ export function bindToolkitHub(root,{
       catch(error){onError(action,error);}
     });
   }
-  for(const control of shell.querySelectorAll('[data-toolkit-theme]')) {
-    control.addEventListener('click',async()=>{
-      const selected=control.dataset.toolkitTheme;
-      if(!['light','dark'].includes(selected)) return;
-      control.disabled=true;
-      try {
-        await (services.setTheme??setToolkitTheme)(selected,{gameRef});
-        applyToolkitTheme(shell,selected);
-        paintTheme(selected);
-      } catch(error) {
-        onError('tema',error);
-        applyToolkitTheme(shell,getToolkitTheme({gameRef}));
-      } finally {control.disabled=false;}
-    });
-  }
   return true;
 }
 
@@ -97,11 +80,10 @@ export async function openToolkitHub({
   DialogClass=globalThis.foundry?.applications?.api?.DialogV2
 }={}) {
   if (!DialogClass?.wait) throw new Error('DialogV2 indisponível: necessário Foundry V13.');
-  const theme=getToolkitTheme({gameRef});
   return DialogClass.wait({
     window:{title:'T20 Toolkit — Ferramentas de Arton',resizable:true},
     position:{width:1050,height:'auto'},
-    content:renderToolkitHub(TOOLKIT_FEATURES,{theme}),
+    content:renderToolkitHub(TOOLKIT_FEATURES),
     buttons:[{action:'close',label:'Fechar',default:true,callback:()=>null}],
     render:(_event,app)=>{
       const root=asRoot(app?.element)??asRoot(_event?.target)??asRoot(_event?.currentTarget);
@@ -114,7 +96,6 @@ if (globalThis.Hooks?.once) {
   installErrorLog();
   Hooks.once('init',()=>{
     registerBetaSettings();
-    registerToolkitThemeSetting();
     registerCastingGuardSetting();
     registerTableRulesSetting();
     registerDirectUseSetting();
@@ -122,7 +103,6 @@ if (globalThis.Hooks?.once) {
     globalThis.game.t20Toolkit=Object.freeze({
       version:MODULE_VERSION, features:TOOLKIT_FEATURES,
       engenhocas:Object.freeze({open:openEngenhocas,activate:activateEngenhoca,list:actorEngenhocas}),
-      theme:Object.freeze({get:getToolkitTheme,set:setToolkitTheme}),
       open:openHome,
       home:Object.freeze({open:openHome}),
       hub:Object.freeze({open:openToolkitHub}),

@@ -1,6 +1,6 @@
 /* T20 Toolkit — janelas das ferramentas (Buscador, Grimório, Escriba, Usurpador, Planejador).
- * Segue o Figma "T20 Toolkit — Design System v0.15", página "Janelas compactas e estados".
- * Tudo sob .t20tk-bz; cores vêm dos tokens de toolkit-theme.css; fontes de toolkit-fonts.css.
+ * Tudo sob .t20tk-bz; cores vêm dos tokens de toolkit-theme.css (que seguem o tema do Foundry);
+ * fontes de toolkit-fonts.css. Botões e campos usam o desenho do próprio Foundry.
  * O CSS do Foundry V13 fica em @layer, então estas regras (sem layer) ganham dele. */
 
 /* ---------- janela ---------- */
@@ -14,8 +14,6 @@
   --t20-radius-s: 6px; --t20-radius: 8px; --t20-radius-l: 10px;
   --t20-pad: 18px;
 }
-.t20tk-shell.t20tk-bz[data-theme="dark"] { color-scheme: dark; }
-.t20tk-shell.t20tk-bz[data-theme="light"] { color-scheme: light; }
 .t20tk-bz :where(h2, h3, h4, h5, p, li, dt, dd, label, small, b, strong) { color: inherit; text-shadow: none; }
 .t20tk-bz :where(h2, h3, h4, h5) { border: 0; margin: 0; padding: 0; font-weight: 700; line-height: 1.25; }
 .t20tk-bz :where(ol, ul) { margin: 0; }
@@ -24,61 +22,46 @@
 .t20tk-bz button:disabled { cursor: not-allowed; }
 .t20tk-bz :is(input, select, textarea) { font-family: var(--t20-font-ui); }
 
-/* ---------- moldura: trilho + cabeçalho + título ---------- */
-.t20tk-shell.t20tk-frame { display: grid; grid-template-columns: 56px minmax(0, 1fr); }
-.t20tk-rail { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 6px 12px; background: var(--t20-bg-canvas); border-top: 6px solid var(--t20-accent); min-height: 0; overflow-y: auto; }
-.t20tk-rail-brand { font-family: var(--t20-font-head); font-weight: 700; font-size: 16px; color: var(--t20-accent); margin: 6px 0 12px; letter-spacing: .02em; }
-.t20tk-frame .t20tk-rail-btn { display: grid; place-items: center; width: 42px; height: 42px; min-height: 0; flex: 0 0 auto; padding: 0; margin: 0; border: 0; border-radius: var(--t20-radius); background: transparent; color: var(--t20-text-primary); font-size: 19px; font-weight: 700; }
-.t20tk-frame .t20tk-rail-btn:hover { background: var(--t20-bg-interactive); color: var(--t20-text-primary); }
-.t20tk-frame .t20tk-rail-btn[data-tool="buscador"], .t20tk-frame .t20tk-rail-btn[data-tool="escriba"] { font-size: 23px; }
-.t20tk-frame .t20tk-rail-btn[data-tool="usurpador"], .t20tk-frame .t20tk-rail-btn[data-tool="engenhocas"] { font-size: 17px; }
-.t20tk-frame .t20tk-rail-btn[aria-current="page"] { background: var(--t20-bg-selected); color: var(--t20-accent); }
-.t20tk-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; overflow: hidden; }
+/* ---------- moldura: abas das ferramentas + título ---------- */
+.t20tk-shell.t20tk-frame { display: flex; flex-direction: column; }
+.t20tk-tools { display: flex; flex: 0 0 auto; align-items: stretch; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--color-tabs-border, var(--t20-border-subtle)); overflow-x: auto; scrollbar-width: none; }
+.t20tk-frame .t20tk-tools-tab { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; width: auto; height: auto; min-height: 0; margin: 0 0 -1px; padding: 8px 10px 7px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--color-text-secondary); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.t20tk-frame .t20tk-tools-tab i { font-size: 12px; }
+.t20tk-frame .t20tk-tools-tab:hover { background: none; color: var(--color-text-primary); text-shadow: 0 0 10px var(--color-shadow-primary); }
+.t20tk-frame .t20tk-tools-tab.active { outline: none; box-shadow: none; color: var(--color-text-emphatic, var(--t20-text-primary)); border-bottom-color: var(--t20-accent); text-shadow: 0 0 10px var(--color-shadow-primary); }
+.t20tk-frame .t20tk-tools-tab.active i { color: var(--t20-accent); }
+.t20tk-frame .t20tk-tools-tab--gm { margin-left: auto; }
+.t20tk-main { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; }
 .t20tk-main > * { flex: 0 0 auto; }
+@container (max-width: 760px) { .t20tk-frame .t20tk-tools-tab > span { display: none; } .t20tk-frame .t20tk-tools-tab { padding: 8px 9px 7px; } .t20tk-frame .t20tk-tools-tab i { font-size: 14px; } }
 
-.t20tk-head { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 12px 8px var(--t20-pad); background: var(--t20-bg-surface); border-bottom: 1px solid var(--t20-border-subtle); }
-.t20tk-crumb { font-size: 11px; color: var(--t20-text-secondary); white-space: nowrap; }
-.t20tk-crumb i { font-style: normal; margin: 0 4px; opacity: .7; }
-.t20tk-head-actor { margin-left: auto; display: flex; align-items: baseline; flex-wrap: wrap; justify-content: flex-end; gap: 2px 8px; min-width: 0; font-size: 12px; color: var(--t20-text-secondary); text-align: right; }
+.t20tk-head-actor { margin-left: auto; align-self: flex-start; padding-top: 2px; display: flex; align-items: baseline; flex-wrap: wrap; justify-content: flex-end; gap: 2px 8px; min-width: 0; font-size: 12px; color: var(--t20-text-secondary); text-align: right; }
 .t20tk-head-actor b { font-size: 13px; color: var(--t20-text-primary); }
-.t20tk-frame .t20tk-theme-btn { flex: 0 0 auto; width: 46px; height: 34px; min-height: 0; padding: 0; margin: 0; border: 0; border-radius: var(--t20-radius); background: var(--t20-bg-interactive); color: var(--t20-accent); font-size: 16px; font-weight: 700; }
-.t20tk-frame .t20tk-theme-btn:hover { background: var(--t20-bg-selected); color: var(--t20-accent); }
 
-.t20tk-titlebar { padding: 14px var(--t20-pad) 10px; }
+.t20tk-titlebar { display: flex; align-items: flex-start; gap: 12px; padding: 12px var(--t20-pad) 10px; }
+.t20tk-titlebar-text { min-width: 0; }
 .t20tk-eyebrow { margin: 0 0 4px; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--t20-accent); }
-.t20tk-titlebar h2 { font-family: var(--t20-font-head); font-size: 22px; color: var(--t20-text-primary); }
+.t20tk-titlebar h2 { font-family: var(--t20-font-head); font-size: 20px; font-weight: 600; color: var(--color-text-emphatic, var(--t20-text-primary)); }
 .t20tk-subtitle { margin: 4px 0 0; font-size: 12px; color: var(--t20-text-secondary); }
 
 /* ---------- componentes ---------- */
 .t20tk-frame .t20tk-bz-link, .t20tk-bz .t20tk-bz-link { display: inline; width: auto; min-height: 0; height: auto; padding: 0; margin: 0; border: 0; background: none; color: var(--t20-accent); font-size: 12px; font-weight: 700; text-decoration: none; }
 .t20tk-frame .t20tk-bz-link:hover, .t20tk-bz .t20tk-bz-link:hover { text-decoration: underline; background: none; color: var(--t20-accent-hover); }
 
-.t20tk-shell.t20tk-bz .t20tk-ui-button { display: inline-flex; align-items: center; justify-content: center; width: auto; min-width: 0; min-height: 32px; height: auto; margin: 0; padding: 6px 12px; border: 0; border-radius: var(--t20-radius); background: var(--t20-bg-interactive); color: var(--t20-text-primary); font-size: 12px; font-weight: 700; white-space: nowrap; }
-.t20tk-shell.t20tk-bz .t20tk-ui-button:not(:disabled):hover { background: var(--t20-bg-selected); color: var(--t20-accent); }
-.t20tk-shell.t20tk-bz .t20tk-ui-button--primary { background: var(--t20-accent); color: var(--t20-text-on-accent); }
-.t20tk-shell.t20tk-bz .t20tk-ui-button--primary:not(:disabled):hover { background: var(--t20-accent-hover); color: var(--t20-text-on-accent); }
-.t20tk-shell.t20tk-bz .t20tk-ui-button:disabled { background: var(--t20-bg-surface-alt); color: var(--t20-text-secondary); opacity: .72; }
+.t20tk-shell.t20tk-bz .t20tk-ui-button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; width: auto; min-width: 0; min-height: 30px; height: auto; margin: 0; padding: 5px 12px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.t20tk-shell.t20tk-bz .t20tk-ui-button--primary { --button-background-color: var(--t20-accent); --button-border-color: var(--t20-accent); --button-text-color: var(--t20-text-on-accent); --button-hover-background-color: var(--t20-accent-hover); --button-hover-border-color: var(--t20-accent-hover); --button-hover-text-color: var(--t20-text-on-accent); }
 
 .t20tk-bz :is(input[type="search"], input[type="text"], input[type="number"], select) {
-  height: 36px; min-height: 0; margin: 0; padding: 0 10px; border: 1px solid var(--t20-border-subtle); border-radius: 7px;
-  background-color: var(--t20-bg-surface); color: var(--t20-text-primary); font-size: 12px; box-shadow: none; outline: none;
-  --input-background-color: var(--t20-bg-surface); --input-border-color: var(--t20-border-subtle); --input-text-color: var(--t20-text-primary); --input-placeholder-color: var(--t20-text-secondary);
+  height: 32px; min-height: 0; margin: 0; padding: 0 8px; font-size: 12px;
 }
 .t20tk-bz select { padding-right: 6px; width: auto; }
-.t20tk-bz select option, .t20tk-bz select optgroup { background: var(--t20-bg-surface); color: var(--t20-text-primary); }
-.t20tk-bz :is(input, select)::placeholder { color: var(--t20-text-secondary); opacity: 1; }
-.t20tk-bz :is(input[type="search"], input[type="text"], input[type="number"], select):focus { border-color: var(--t20-focus-ring); box-shadow: 0 0 0 1px var(--t20-focus-ring); }
 .t20tk-bz :is(button, a, input, select):focus-visible { outline: 2px solid var(--t20-focus-ring) !important; outline-offset: 2px; }
-.t20tk-bz input[type="checkbox"], .t20tk-bz input[type="radio"] {
-  --checkbox-size: 16px; --checkbox-background-color: var(--t20-bg-surface); --checkbox-checked-color: var(--t20-accent);
-  --checkbox-checkmark-color: var(--t20-text-on-accent); --checkbox-disabled-color: var(--t20-border-subtle);
-  accent-color: var(--t20-accent); margin: 0; flex: 0 0 auto; width: 16px; height: 16px; font-size: 16px;
-}
+.t20tk-bz input[type="checkbox"], .t20tk-bz input[type="radio"] { margin: 0; flex: 0 0 auto; }
 .t20tk-bz-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; cursor: pointer; }
 
 .t20tk-search { position: relative; display: flex; align-items: center; flex: 3 1 260px; min-width: 0; }
 .t20tk-search > span { position: absolute; left: 12px; font-size: 14px; color: var(--t20-text-secondary); pointer-events: none; }
-.t20tk-bz .t20tk-search input { width: 100%; height: 40px; padding-left: 32px; border-radius: var(--t20-radius); font-size: 13px; }
+.t20tk-bz .t20tk-search input { width: 100%; height: 34px; padding-left: 30px; font-size: 13px; }
 
 /* Mensagens (componente T20 / Mensagem) */
 .t20tk-bz-warn { margin: 8px 0 0; padding: 8px 12px; border-radius: var(--t20-radius); border-left: 4px solid var(--t20-warning); background: var(--t20-bg-surface-alt); color: var(--t20-text-primary); font-size: 12px; }
@@ -384,8 +367,6 @@
 .t20tk-es-list .t20tk-card-side { max-width: none; flex-wrap: nowrap; }
 
 /* ---------- 0.5.1 — Regras da mesa (Figma: Configurações do mestre / Política da campanha) ---------- */
-.t20tk-rail-spacer { flex: 1 1 auto; }
-.t20tk-frame .t20tk-rail-btn--gm { background: var(--t20-bg-interactive); color: var(--t20-accent); font-size: 18px; }
 .t20tk-regras { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 0 var(--t20-pad) 18px; }
 .t20tk-regras > .t20tk-eyebrow { margin: 10px 0 0; }
 .t20tk-policy { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 14px; border-radius: var(--t20-radius-l); background: var(--t20-bg-surface-alt); }

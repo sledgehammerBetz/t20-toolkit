@@ -11,7 +11,7 @@ export function cardHTML({ img = '', name = '', nameHtml = '', meta = '', metaHt
   const attrs = action ? ` type="button" data-action="${action}" data-uuid="${escapeHtml(uuid)}" aria-pressed="${selected}"` : '';
   return `<li class="t20tk-bz-row t20tk-card ${selected ? 'is-selected' : ''}" data-status="${status}">
     <${tag} class="t20tk-bz-main"${attrs}>
-      ${img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy">` : '<span class="t20tk-card-noimg" aria-hidden="true">✦</span>'}
+      ${img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy">` : '<span class="t20tk-card-noimg" aria-hidden="true"><i class="fa-solid fa-star" inert></i></span>'}
       <span class="t20tk-card-copy">
         <span class="t20tk-bz-name">${nameHtml || escapeHtml(name)}</span>
         ${metaHtml || meta ? `<span class="t20tk-card-meta">${metaHtml || escapeHtml(meta)}</span>` : ''}

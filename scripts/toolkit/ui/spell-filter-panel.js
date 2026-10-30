@@ -23,7 +23,7 @@ export function spellFilterPanel(state, options, { count = null, maxCircle = 0, 
   };
   const groups = FILTER_GROUPS.map(g => `<fieldset class="t20tk-sf-group"><legend>${escapeHtml(g.label)}</legend><div class="t20tk-sf-grid">${g.filters.filter(k => (options[k] ?? []).length).map(select).join('')}</div></fieldset>`).join('');
   return `<section class="t20tk-bz-filters t20tk-sf">
-    <label class="t20tk-search"><span aria-hidden="true">⌕</span><input type="search" name="sfQuery" data-sf-query value="${escapeHtml(state.query ?? '')}" placeholder="${escapeHtml(placeholder)}" aria-label="Buscar magia"></label>
+    <label class="t20tk-search"><span aria-hidden="true"><i class="fa-solid fa-magnifying-glass" inert></i></span><input type="search" name="sfQuery" data-sf-query value="${escapeHtml(state.query ?? '')}" placeholder="${escapeHtml(placeholder)}" aria-label="Buscar magia"></label>
     <button type="button" class="t20tk-ui-button t20tk-filter-toggle" data-sf-action="panel" aria-expanded="${!!state.panel}">Filtros <span class="t20tk-count">${advanced}</span></button>
     <button type="button" class="t20tk-ui-button" data-sf-action="clear">Limpar</button>
     <div class="t20tk-chips" role="group" aria-label="Círculo"><span class="t20tk-chips-label">Círculo</span>${chip('', 'Todos')}${CIRCLES.map(c => chip(c, `${c}º`)).join('')}</div>
@@ -34,7 +34,7 @@ export function spellFilterPanel(state, options, { count = null, maxCircle = 0, 
     <div class="t20tk-filter-panel t20tk-sf-panel" ${state.panel ? '' : 'hidden'}>
       ${groups}
       <label class="t20tk-bz-check t20tk-sf-enh"><input type="checkbox" data-sf="useEnhancements" ${state.useEnhancements ? 'checked' : ''}> Considerar aprimoramentos nos filtros <small>(mostra a magia quando um aprimoramento atende ao filtro, com o custo)</small></label>
-      ${state.useEnhancements && !ENHANCEABLE.some(k => state[k]) ? '<p class="t20tk-bz-note t20tk-sf-enh-hint">Ligado. Agora escolha um filtro acima (execução, alcance, duração, resistência, função, elemento, condição…) — as magias que só atendem com aprimoramento aparecem marcadas com <b>✦ Por aprimoramento</b>.</p>' : ''}
+      ${state.useEnhancements && !ENHANCEABLE.some(k => state[k]) ? '<p class="t20tk-bz-note t20tk-sf-enh-hint">Ligado. Agora escolha um filtro acima (execução, alcance, duração, resistência, função, elemento, condição…) — as magias que só atendem com aprimoramento aparecem marcadas com <b><i class="fa-solid fa-star" inert></i> Por aprimoramento</b>.</p>' : ''}
     </div>
   </section>`;
 }
@@ -67,4 +67,4 @@ export function bindSpellFilterPanel(root, state, onChange) {
 }
 
 /** Marcador "aparece por aprimoramento": diz qual filtro, qual aprimoramento e o custo. */
-export const viaTags = via => via?.length ? `<span class="t20tk-sf-via" title="${escapeHtml(via.map(v => v.title).join('\n'))}"><b>✦ Por aprimoramento</b>${via.map(v => `<i>${escapeHtml(v.filter ? `${v.filter}: ${v.value}` : v.label)}${v.cost ? ` · <em>${escapeHtml(v.cost)}</em>` : ''}</i>`).join('')}</span>` : '';
+export const viaTags = via => via?.length ? `<span class="t20tk-sf-via" title="${escapeHtml(via.map(v => v.title).join('\n'))}"><b><i class="fa-solid fa-star" inert></i> Por aprimoramento</b>${via.map(v => `<i>${escapeHtml(v.filter ? `${v.filter}: ${v.value}` : v.label)}${v.cost ? ` · <em>${escapeHtml(v.cost)}</em>` : ''}</i>`).join('')}</span>` : '';

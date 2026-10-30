@@ -30,7 +30,6 @@
   ],
   "styles": [
     "styles/ui-foundation.css",
-    "styles/t20-toolkit.css",
     "styles/toolkit-fonts.css",
     "styles/toolkit-theme.css",
     "styles/toolkit-engenhocas.css",

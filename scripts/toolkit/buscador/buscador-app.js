@@ -14,7 +14,7 @@ import { readSchools, casterContext } from '../core/caster-context.js';
 import { refreshCompendiumIndex } from '../core/spell-index.js';
 import { filterSpells, filterOptions, EMPTY_FILTERS } from '../core/spells/spell-filter.js';
 import { spellFilterPanel, bindSpellFilterPanel, viaTags } from '../ui/spell-filter-panel.js';
-import { toolFrame, onNavigate, switchTheme, reopen } from '../ui/frame.js';
+import { toolFrame, onNavigate, reopen } from '../ui/frame.js';
 
 const ApplicationV2 = globalThis.foundry?.applications?.api?.ApplicationV2 ?? class {};
 /** Rótulo traduzido de uma lista do CONFIG.T20 (ex.: timePeriods.inst → "Instantânea"). */
@@ -37,7 +37,6 @@ export class BuscadorApp extends ApplicationV2 {
     actions: {
       add: BuscadorApp.#onAdd,
       select: BuscadorApp.#onSelect,
-      theme: BuscadorApp.#onTheme,
       t20nav: onNavigate,
       saveSchools: BuscadorApp.#onSaveSchools,
       saveDuplo: BuscadorApp.#onSaveDuplo,
@@ -396,10 +395,6 @@ export class BuscadorApp extends ApplicationV2 {
   static #onClearFilters() {
     Object.assign(this.filters, { query: '', circle: '', type: '', school: '', pack: '', hideOwned: false });
     this.render();
-  }
-
-  static async #onTheme(event, target) {
-    await switchTheme(target.dataset.themeValue);
   }
 
   static async #onReload(event, target) {

@@ -1,38 +1,33 @@
 /**
- * Moldura comum das janelas do Toolkit (Figma "Design System v0.15", telas compactas):
- * trilho de navegação à esquerda, cabeçalho com caminho + personagem + tema, título editorial.
+ * Moldura comum das janelas do Toolkit: abas das ferramentas no estilo do Foundry, título e personagem.
+ * As cores vêm do tema claro/escuro do Foundry (toolkit-theme.css); o Toolkit não tem tema próprio.
  * Usada pelas janelas ApplicationV2 (toolFrame) e pelos DialogV2 das Engenhocas (frameParts).
  */
 import { escapeHtml } from '../core/t20.js';
-import { getToolkitTheme, setToolkitTheme } from './theme-controller.js';
 
 export const TOOLS = Object.freeze([
-  { id: 'hub', icon: '⌂', label: 'Início' },
-  { id: 'planner', icon: '↗', label: 'Planejador' },
-  { id: 'buscador', icon: '⌕', label: 'Buscador de Magias' },
-  { id: 'grimorio', icon: '✦', label: 'Grimório' },
-  { id: 'escriba', icon: '≡', label: 'Escriba Arcano' },
-  { id: 'usurpador', icon: '◆', label: 'Usurpador' },
-  { id: 'engenhocas', icon: '⚙', label: 'Engenhocas' },
-  { id: 'regras', icon: '⚖', label: 'Regras da mesa', bottom: true }
+  { id: 'hub', icon: 'fa-solid fa-house', label: 'Início' },
+  { id: 'planner', icon: 'fa-solid fa-route', label: 'Planejador' },
+  { id: 'buscador', icon: 'fa-solid fa-magnifying-glass', label: 'Buscador', title: 'Buscador de Magias' },
+  { id: 'grimorio', icon: 'fa-solid fa-book', label: 'Grimório' },
+  { id: 'escriba', icon: 'fa-solid fa-feather', label: 'Escriba', title: 'Escriba Arcano' },
+  { id: 'usurpador', icon: 'fa-solid fa-hand-sparkles', label: 'Usurpador' },
+  { id: 'engenhocas', icon: 'fa-solid fa-gears', label: 'Engenhocas' },
+  { id: 'regras', icon: 'fa-solid fa-scale-balanced', label: 'Regras', title: 'Regras da mesa', bottom: true }
 ]);
 
-const themeButton = theme => {
-  const next = theme === 'dark' ? 'light' : 'dark';
-  return `<button type="button" class="t20tk-theme-btn" data-action="theme" data-theme-value="${next}" title="${next === 'dark' ? 'Tema escuro (Arquivo Noturno)' : 'Tema claro (Pergaminho)'}" aria-label="Trocar tema">${next === 'dark' ? '☾' : '☀'}</button>`;
-};
-
-/** Pedaços da moldura, em HTML. `crumb` é o nome mostrado no caminho. */
-export function frameParts({ tool, actor = null, who = '', eyebrow = '', title = '', subtitle = '', crumb = '' }) {
-  const theme = getToolkitTheme();
-  const current = TOOLS.find(t => t.id === tool);
-  const rail = `<nav class="t20tk-rail" aria-label="Ferramentas do T20 Toolkit"><span class="t20tk-rail-brand">T20</span>${TOOLS.map(t => `${t.bottom ? '<span class="t20tk-rail-spacer"></span>' : ''}<button type="button" class="t20tk-rail-btn${t.bottom ? ' t20tk-rail-btn--gm' : ''}" data-action="t20nav" data-tool="${t.id}" title="${escapeHtml(t.label)}" aria-label="${escapeHtml(t.label)}"${t.id === tool ? ' aria-current="page"' : ''}>${t.icon}</button>`).join('')}</nav>`;
+/** Pedaços da moldura, em HTML. */
+export function frameParts({ tool, actor = null, who = '', eyebrow = '', title = '', subtitle = '' }) {
+  const tabs = `<nav class="t20tk-tools" aria-label="Ferramentas do T20 Toolkit">${TOOLS.map(t => {
+    const name = t.title ?? t.label;
+    return `<button type="button" class="t20tk-tools-tab${t.bottom ? ' t20tk-tools-tab--gm' : ''}${t.id === tool ? ' active' : ''}" data-action="t20nav" data-tool="${t.id}" data-tooltip="${escapeHtml(name)}" aria-label="${escapeHtml(name)}"${t.id === tool ? ' aria-current="page"' : ''}><i class="${t.icon}" inert></i><span>${escapeHtml(t.label)}</span></button>`;
+  }).join('')}</nav>`;
   const person = actor === false ? '' : actor
     ? `<span class="t20tk-head-actor"><b>${escapeHtml(actor.name)}</b>${who ? `<span>${who}</span>` : ''}<button type="button" class="t20tk-bz-link" data-action="openSheet">Abrir ficha</button></span>`
     : '<span class="t20tk-head-actor"><b>Sem personagem</b><span>abra pela ficha (botão Toolkit)</span></span>';
-  const head = `<header class="t20tk-head"><span class="t20tk-crumb">T20 Toolkit <i>/</i> ${escapeHtml(crumb || current?.label || title)}</span>${person}${themeButton(theme)}</header>`;
-  const titlebar = title ? `<div class="t20tk-titlebar">${eyebrow ? `<p class="t20tk-eyebrow">${escapeHtml(eyebrow)}</p>` : ''}<h2>${escapeHtml(title)}</h2>${subtitle ? `<p class="t20tk-subtitle">${subtitle}</p>` : ''}</div>` : '';
-  return { theme, rail, head, titlebar };
+  const heading = title ? `<div class="t20tk-titlebar-text">${eyebrow ? `<p class="t20tk-eyebrow">${escapeHtml(eyebrow)}</p>` : ''}<h2>${escapeHtml(title)}</h2>${subtitle ? `<p class="t20tk-subtitle">${subtitle}</p>` : ''}</div>` : '';
+  const titlebar = heading || person ? `<header class="t20tk-titlebar">${heading}${person}</header>` : '';
+  return { tabs, titlebar };
 }
 
 /**
@@ -40,10 +35,10 @@ export function frameParts({ tool, actor = null, who = '', eyebrow = '', title =
  * @param {string} content  HTML da ferramenta
  */
 export function toolFrame({ tool, extra = '', ...rest }, content = '') {
-  const { theme, rail, head, titlebar } = frameParts({ tool, ...rest });
-  return `<div class="t20tk-shell t20tk-bz t20tk-frame ${extra}" data-theme="${theme}" data-tool="${tool}">
-    ${rail}
-    <div class="t20tk-main">${head}${titlebar}${content}</div>
+  const { tabs, titlebar } = frameParts({ tool, ...rest });
+  return `<div class="t20tk-shell t20tk-bz t20tk-frame ${extra}" data-tool="${tool}">
+    ${tabs}
+    <div class="t20tk-main">${titlebar}${content}</div>
   </div>`;
 }
 
@@ -59,27 +54,6 @@ export async function navigateTool(app, target) {
     console.error(`[T20 Toolkit] Falha ao abrir ${tool}:`, error);
     globalThis.ui?.notifications?.error?.(`T20 Toolkit: não foi possível abrir ${tool}.`);
   }
-}
-
-/** Aplica o tema em todas as janelas do Toolkit abertas, sem redesenhar nada. */
-export function paintTheme(value, doc = globalThis.document) {
-  if (!doc?.querySelectorAll) return;
-  const next = value === 'dark' ? 'light' : 'dark';
-  for (const shell of doc.querySelectorAll('.t20tk-shell[data-theme]')) shell.dataset.theme = value;
-  for (const win of doc.querySelectorAll('[data-t20tk-tool-theme]')) win.dataset.t20tkToolTheme = value;
-  for (const btn of doc.querySelectorAll('.t20tk-theme-btn')) {
-    if (btn.dataset.themeValue) btn.dataset.themeValue = next;
-    if (btn.dataset.toolkitTheme) btn.dataset.toolkitTheme = next;
-    btn.textContent = next === 'dark' ? '☾' : '☀';
-    btn.title = next === 'dark' ? 'Tema escuro (Arquivo Noturno)' : 'Tema claro (Pergaminho)';
-  }
-  for (const btn of doc.querySelectorAll('[data-toolkit-theme]:not(.t20tk-theme-btn)')) btn.setAttribute('aria-pressed', String(btn.dataset.toolkitTheme === value));
-}
-
-/** Troca o tema (preferência do usuário) e repinta todas as janelas abertas. */
-export async function switchTheme(value) {
-  await setToolkitTheme(value);
-  paintTheme(value);
 }
 
 /** Handler para DEFAULT_OPTIONS.actions (this = a janela). */

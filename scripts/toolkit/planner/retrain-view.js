@@ -49,7 +49,7 @@ export function renderDoneLevel(app) {
     const label = item.type === 'poder' ? (TIPO_LABEL[tipo] ?? 'Poder') : item.type === 'classe' ? 'Classe' : item.type === 'race' ? 'Raça' : item.type === 'magia' ? 'Magia' : 'Item';
     const from = item.flags?.[MODULE_ID]?.retrainedFrom;
     return `<div class="t20tk-lv-gain" data-kind="${isSwappable(item) ? 'power' : 'ability'}">
-      ${item.img ? `<img src="${escapeHtml(item.img)}" alt="">` : '<span class="t20tk-wz-noimg">◆</span>'}
+      ${item.img ? `<img src="${escapeHtml(item.img)}" alt="">` : '<span class="t20tk-wz-noimg"><i class="fa-solid fa-diamond" inert></i></span>'}
       <span><small>${escapeHtml(label)}</small><b>${escapeHtml(item.name)}</b>${from ? `<em>retreinado (antes: ${escapeHtml(from)})</em>` : ''}</span>
       ${isSwappable(item) && can ? `<button type="button" class="t20tk-ui-button" data-action="rtBrowse" data-item="${item.id}">Retreinar…</button>` : ''}
     </div>`;
