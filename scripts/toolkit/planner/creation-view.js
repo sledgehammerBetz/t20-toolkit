@@ -18,7 +18,7 @@ import { planFlag, draftUpdate } from './plan-draft.js';
 import { postCard, chatFlavor } from '../ui/chat.js';
 import { escapeHtml, fold } from '../core/t20.js';
 import { ATTRS, ATTR_LABELS, POINT_COST, stepPoint, validatePoints, parseClassSkills, skillKeyFor, intBonusSkills } from './creation-rules.js';
-import { ORIGINS } from './origins.js';
+import { ORIGINS, originPowerData } from './origins.js';
 import { ORIGIN_ITEMS, originItemChoices, weaponOptions, findGear } from './origin-items.js';
 import { gainsAt, classSkills, classInfo } from './planner-rules.js';
 import { devotionCheck, mustBeDevout, grantedPowerCount } from '../core/gods.js';
@@ -674,6 +674,7 @@ export async function applyCreation(app) {
       if (origin.fixed) {
         const power = idx.powers.find(x => x.tipo === 'origem' && x.key === fold(origin.fixed.power));
         if (power) queueFrom(power.uuid);
+        else if (origin.text) queueData(originPowerData(origin));
         continue;
       }
       for (const pick of S.picks) {
