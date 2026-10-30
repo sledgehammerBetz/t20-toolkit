@@ -173,6 +173,7 @@ export function powerGroupFilter(group) {
     if (group === 'tormenta') return p.tipo === 'geral' && fold(p.subtipo) === 'tormenta';
     if (group === 'origem') return p.tipo === 'origem';
     if (group === 'geralOuOrigem') return p.tipo === 'geral' || p.tipo === 'origem';
+    if (group === 'origemPropria') return p.tipo === 'geral' || p.tipo === 'origem';   // benefício de origem própria (JdA p. 95)
     if (group === 'classe') return p.tipo === 'classe';
     if (group === 'combate') return p.tipo === 'geral' && fold(p.subtipo) === 'combate';
     if (group === 'familiar') return p.tipo === 'classe' && BASIC_FAMILIARS.test(p.key);

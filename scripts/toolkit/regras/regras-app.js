@@ -71,6 +71,7 @@ export class RegrasApp extends ApplicationV2 {
         <div class="t20tk-chips">${ages}</div></section>
       ${policy({ key: 'originsCount', title: 'Origens por personagem', source: 'homebrew', text: 'Quantas origens o personagem escolhe na criação. Cada uma dá seus benefícios e itens.', value: rules.originsCount, gm,
         options: [{ value: 1, label: '1 (livro)', tone: 'on' }, { value: 2, label: '2 origens' }, { value: 3, label: '3 origens' }] })}
+      ${policy({ key: 'customOrigins', title: 'Origem própria', source: 'JdA p. 95', text: 'O jogador pode criar a própria origem no Planejador: nome, dois benefícios (perícias, poderes ou um poder único inventado) e itens. Tudo combinado com o mestre.', value: rules.customOrigins, gm, options: ONOFF })}
       <p class="t20tk-eyebrow">Progressão</p>
       ${policy({ key: 'distinctions', title: 'Distinções', source: 'Heróis cap. 2', text: 'Os poderes de distinção aparecem como opção ao escolher poderes no Planejador. A admissão é combinada com o mestre.', value: rules.distinctions, gm, options: ONOFF })}
       ${policy({ key: 'extraGains', title: 'Ganhos fora da progressão', source: 'homebrew', text: 'Poderes, perícias ou +1 em atributo dados pela campanha (treino, recompensa, item, bênção). Ficam registrados no Planejador.', value: rules.extraGains, gm,

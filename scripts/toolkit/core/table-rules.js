@@ -16,6 +16,7 @@ export const TABLE_RULES_DEFAULTS = Object.freeze({
   complications: false,
   ages: Object.freeze({ jda: false, herois: false }), // regras de idade liberadas; cada personagem escolhe a sua
   originsCount: 1,              // homebrew: quantas origens na criação
+  customOrigins: true,          // Sua Própria Origem (JdA p. 95): o jogador monta a origem, combinando com o mestre
   distinctions: false,
   extraGains: 'gm',             // 'off' | 'gm' | 'all' — ganhos fora da progressão no Planejador
   retrain: 'off'                // 'off' | 'levelUp' (uma troca por nível de personagem) | 'free' — retreino no Planejador
@@ -49,6 +50,7 @@ export function normalizeRules(raw = {}) {
     complications: !!(raw.complications ?? d.complications),
     ages: normalizeAges(raw),
     originsCount: Math.max(1, Math.min(3, Number(raw.originsCount) || 1)),
+    customOrigins: !!(raw.customOrigins ?? d.customOrigins),
     distinctions: !!(raw.distinctions ?? d.distinctions),
     extraGains: ['off', 'gm', 'all'].includes(raw.extraGains) ? raw.extraGains : d.extraGains,
     retrain: RETRAIN_MODES.includes(raw.retrain) ? raw.retrain : d.retrain

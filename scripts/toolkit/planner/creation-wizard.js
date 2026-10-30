@@ -7,7 +7,7 @@ import { draftUpdate } from './plan-draft.js';
 import { MODULE_ID } from '../../constants.js';
 import { escapeHtml, fold, SPELL_SCHOOLS, plainText } from '../core/t20.js';
 import { ATTRS, ATTR_LABELS } from './creation-rules.js';
-import { ORIGINS, findOriginPower } from './origins.js';
+import { ORIGINS, findOriginPower, CUSTOM_ORIGIN, CUSTOM_ORIGIN_SOURCE, originOf, originName, customBenefitDone } from './origins.js';
 import { ORIGIN_ITEMS } from './origin-items.js';
 import { gainsAt, classSkills, classInfo, prerequisiteText, evaluatePower } from './planner-rules.js';
 import { GENERAL_CATS, catOf } from './level-view.js';
@@ -20,7 +20,7 @@ import { getSpellIndex } from '../core/spell-index.js';
 import { CASTER_CLASSES } from '../core/caster-rules.js';
 import {
   readCreation, raceInfo, creationSkills, creationIssues, ageFor, finalAttributes, originSlots, originSlot, slotPaths,
-  otherAttributes, fxUuids, loadAttrEffects, creationPrereqContext,
+  otherAttributes, fxUuids, loadAttrEffects, creationPrereqContext, customPicks, customItems, chipField,
   devotionContext, renderAttributes, renderAge, renderOriginItems, craftChips, pickButton,
   skillLabels, sign
 } from './creation-view.js';
@@ -220,7 +220,7 @@ function stepOrigin(app, cr, rules, info) {
   const k = slots.includes(w.slot) ? w.slot : 0;
   const S = originSlot(cr, k);
   const P = slotPaths(k);
-  const taken = new Set(slots.filter(j => j !== k).map(j => originSlot(cr, j).origin).filter(Boolean));
+  const taken = new Set(slots.filter(j => j !== k).map(j => originSlot(cr, j).origin).filter(o => o && o !== CUSTOM_ORIGIN));
   const sources = [...new Set(ORIGINS.map(o => o.source))];
   const originSkills = o => o.fixed ? o.fixed.skills : o.skills;
   const allSkills = [...new Set(ORIGINS.flatMap(originSkills))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
@@ -230,15 +230,18 @@ function stepOrigin(app, cr, rules, info) {
     && multiOk(app, 'origin', 'region', v => (o.region ?? '').split(/,\s*/).includes(v))
     && multiOk(app, 'origin', 'skills', v => originSkills(o).includes(v))
     && (!fstate(app, 'origin').kind || (fstate(app, 'origin').kind === 'fixed' ? !!o.fixed : fstate(app, 'origin').kind === 'items' ? (ORIGIN_ITEMS[o.name] ?? []).length > 0 : !o.fixed)));
-  const origin = ORIGINS.find(o => o.name === S.origin);
-  const slotTabs = slots.length > 1 ? `<div class="t20tk-wz-field"><span>Origem</span>${chips('wzSlot', slots.map(j => ({ value: j, label: `${j + 1}ª${originSlot(cr, j).origin ? ` · ${originSlot(cr, j).origin}` : ''}` })), k)}</div>` : '';
+  const origin = originOf(S);
+  const slotTabs = slots.length > 1 ? `<div class="t20tk-wz-field"><span>Origem</span>${chips('wzSlot', slots.map(j => ({ value: j, label: `${j + 1}ª${originSlot(cr, j).origin ? ` · ${originName(originSlot(cr, j))}` : ''}` })), k)}</div>` : '';
   const benefits = o => o.fixed ? `${o.fixed.power}${o.fixed.skills.length ? ` · ${o.fixed.skills.join(', ')}` : ''}` : [...o.skills, ...o.powers].join(', ');
-  const list = `<ul class="t20tk-wz-list">${rows.map(o => card({ name: o.name, sub: benefits(o), tags: [{ text: o.source }, ...(o.region ? [{ text: o.region, tone: 'info' }] : [])], selected: o.name === S.origin, value: o.name, kind: `origin:${k}`, disabled: taken.has(o.name), reason: 'Já escolhida em outra vaga' })).join('')}</ul>`;
+  // Sua Própria Origem (JdA p. 95): primeiro cartão da lista, se a mesa permite.
+  const own = rules.customOrigins && !w.src.origin ? card({ name: 'Criar origem', sub: 'Monte a sua: nome, dois benefícios (perícias, poderes ou um poder único) e itens, combinando com o mestre.', tags: [{ text: CUSTOM_ORIGIN_SOURCE, tone: 'accent' }], selected: S.origin === CUSTOM_ORIGIN, value: CUSTOM_ORIGIN, kind: `origin:${k}` }) : '';
+  const list = `<ul class="t20tk-wz-list">${own}${rows.map(o => card({ name: o.name, sub: benefits(o), tags: [{ text: o.source }, ...(o.region ? [{ text: o.region, tone: 'info' }] : [])], selected: o.name === S.origin, value: o.name, kind: `origin:${k}`, disabled: taken.has(o.name), reason: 'Já escolhida em outra vaga' })).join('')}</ul>`;
   let detail = '';
   if (origin) {
     const labels = skillLabels();
     const age = ageFor(cr, rules);
-    if (origin.fixed) {
+    if (origin.custom) detail = customOriginDetail(app, cr, rules, info, k, S, P);
+    else if (origin.fixed) {
       const needsCraft = origin.fixed.skills.some(n => /^of[íi]cio$/i.test(n.trim()));
       const pw = idx.powers.find(x => x.tipo === 'origem' && x.key === fold(origin.fixed.power));
       detail = `<p class="t20tk-bz-note">${origin.region ? `Origem regional (${escapeHtml(origin.region)}) do ${escapeHtml(origin.source)}` : `Origem especial de ${escapeHtml(origin.source)}`}: benefício fixo.</p>
@@ -270,7 +273,7 @@ function stepOrigin(app, cr, rules, info) {
         <ul class="t20tk-wz-tiles">${skillTiles}${powerTiles}</ul>
         ${craftNeeded ? `<div class="t20tk-wz-row"><span>Qual Ofício</span>${craftChips(P.craft, S.craft, labels)}</div>` : ''}${genericSel}`;
     }
-    detail = `<div class="t20tk-wz-detail"><h4>${escapeHtml(origin.name)}</h4>${detail}${(ORIGIN_ITEMS[origin.name] ?? []).length ? renderOriginItems(idx, origin.name, S, P) : ''}</div>`;
+    detail = `<div class="t20tk-wz-detail"><h4>${escapeHtml(origin.name)}</h4>${detail}${!origin.custom && (ORIGIN_ITEMS[origin.name] ?? []).length ? renderOriginItems(idx, origin.name, S, P) : ''}</div>`;
   }
   const hasDetail = !!origin;
   return split(`${slotTabs}${selectedBar(`origin:${k}`, origin ? { name: origin.name } : null, origin ? `<small>${escapeHtml(origin.source)}</small>` : '')}${filterBox(app, 'origin', sources)}
@@ -278,6 +281,53 @@ function stepOrigin(app, cr, rules, info) {
       ${multiFilter(app, 'origin', 'skills', 'Perícias', allSkills.map(v => ({ value: v, label: v })))}
       ${atlasOnly || (fstate(app, 'origin').region ?? []).length ? multiFilter(app, 'origin', 'region', 'Região', regions.map(v => ({ value: v, label: v })), { modes: false }) : '<p class="t20tk-bz-meta">Escolha a fonte "Atlas de Arton" para filtrar por região.</p>'}${clearBtn(app, 'origin')}`,
     `${viewToggle(app, 'origin', hasDetail, `${rows.length} origens`)}${showDetail(app, 'origin', hasDetail) ? detail : list}`);
+}
+
+/** Detalhe da origem própria (JdA p. 95): nome, história, benefícios e itens. */
+function customOriginDetail(app, cr, rules, info, k, S, P) {
+  const idx = app.index;
+  const c = S.custom ?? {};
+  const labels = skillLabels();
+  const bs = customPicks(cr, S, rules);
+  const pctx = creationPrereqContext(idx, cr, rules, info);
+  const text = (field, value, placeholder, area = false) => area
+    ? `<textarea class="t20tk-wz-text" data-wzinput="${escapeHtml(field)}" rows="3" placeholder="${escapeHtml(placeholder)}">${escapeHtml(value ?? '')}</textarea>`
+    : `<input type="text" class="t20tk-wz-text" data-wzinput="${escapeHtml(field)}" value="${escapeHtml(value ?? '')}" placeholder="${escapeHtml(placeholder)}">`;
+  const KINDS = [{ value: 'skill', label: 'Perícia' }, { value: 'power', label: 'Poder' }, { value: 'unique', label: 'Poder único' }];
+  const benefit = (b, i) => {
+    const path = `${P.custom}.b.${i}`;
+    const other = bs[1 - i] ?? {};
+    const kinds = `<div class="t20tk-wz-chips">${KINDS.map(o => `<button type="button" class="t20tk-chip ${b.kind === o.value ? 'is-on' : ''}" data-action="wzCustomKind" data-path="${escapeHtml(path)}" data-value="${o.value}">${o.label}</button>`).join('')}</div>`;
+    let body = '';
+    if (b.kind === 'skill') {
+      const opts = Object.entries(labels).sort((x, y) => x[1].localeCompare(y[1], 'pt-BR'))
+        .map(([key, label]) => ({ value: key, label, disabled: other.kind === 'skill' && other.value === key, reason: 'Já é o outro benefício' }));
+      body = chipField(`${path}.value`, opts, b.value);
+    } else if (b.kind === 'power') {
+      const item = idx.powerByUuid.get(b.value);
+      const ev = item ? evaluatePower(item, pctx) : null;
+      const miss = ev?.parts.filter(x => x.ok === false).map(x => x.text) ?? [];
+      body = `${pickButton({ path: `${path}.value`, pool: 'origemPropria', title: `${c.name?.trim() || 'Origem própria'}: poder`, item })}${miss.length ? `<p class="t20tk-bz-warn">Não cumpre: ${escapeHtml(miss.join(', '))}. Você recebe o poder, mas ainda precisa cumprir os pré-requisitos (JdA p. 85).</p>` : ''}`;
+    } else if (b.kind === 'unique') {
+      body = `${text(`${path}.name`, b.name, 'Nome do poder')}${text(`${path}.text`, b.text, 'O que ele faz. Use os poderes de origem do livro como referência de força.', true)}`;
+    }
+    return `<div class="t20tk-wz-row"><span>${i + 1}º benefício${customBenefitDone(b) ? ' ✔' : ''}</span><div class="t20tk-wz-stack">${kinds}${body}</div></div>`;
+  };
+  const items = customItems(S);
+  const itemKeys = Object.keys(c.items ?? {}).map(Number);
+  const next = itemKeys.length ? Math.max(...itemKeys) + 1 : 0;
+  const itemChips = Object.entries(c.items ?? {}).filter(([, u]) => u).map(([n, u]) => {
+    const g = (idx.gear ?? []).find(x => x.uuid === u);
+    return `<button type="button" class="t20tk-chip is-on" data-action="wzSet" data-field="${escapeHtml(`${P.custom}.items.${n}`)}" data-value="${escapeHtml(u)}" title="Tirar">${escapeHtml(g?.name ?? 'item')} ✕</button>`;
+  }).join('');
+  return `<p class="t20tk-bz-warn">Origem própria: combine tudo com o mestre antes de aplicar. "Só não vale apelar!" (JdA p. 95)</p>
+    <div class="t20tk-wz-row"><span>Nome</span>${text(`${P.custom}.name`, c.name, 'ex.: Alienista de Salistick')}</div>
+    <div class="t20tk-wz-row"><span>História</span>${text(`${P.custom}.story`, c.story, 'O que você fazia antes de ser aventureiro (opcional).', true)}</div>
+    <p class="t20tk-bz-note">Escolha <b>${bs.length}</b> benefício${bs.length > 1 ? 's' : ''}: perícias, poderes (gerais ou de origem) ou um poder único inventado (${bs.filter(customBenefitDone).length}/${bs.length}).</p>
+    ${bs.map(benefit).join('')}
+    <div class="t20tk-wz-row"><span>Itens</span><div class="t20tk-wz-stack"><div class="t20tk-wz-chips">${itemChips}${items.length ? '' : '<span class="t20tk-bz-meta">nenhum item do compêndio</span>'}</div>
+      ${pickButton({ path: `${P.custom}.items.${next}`, pool: 'gear', title: `${c.name?.trim() || 'Origem própria'}: item inicial` })}
+      ${text(`${P.custom}.itemsNote`, c.itemsNote, 'Outros itens combinados com o mestre (vão anotados no chat).')}</div></div>`;
 }
 
 /* ---------- etapa: Classe ---------- */
@@ -472,7 +522,7 @@ function stepSummary(app, cr, rules, info, issues) {
   return `<div class="t20tk-wz-page"><dl class="t20tk-wz-summary">
     ${row('Raça', info.race?.name)}${row('Atributos', ATTRS.map(a => `${a.toUpperCase()} ${sign(finals[a]) || '0'}`).join(' · '))}
     ${age.label ? row('Idade', age.label) : ''}
-    ${row(slots.length > 1 ? 'Origens' : 'Origem', slots.map(k => originSlot(cr, k).origin).filter(Boolean).join(' / ') || (slots.length ? '' : 'sem origem'))}
+    ${row(slots.length > 1 ? 'Origens' : 'Origem', slots.map(k => originName(originSlot(cr, k))).filter(Boolean).join(' / ') || (slots.length ? '' : 'sem origem'))}
     ${row('Classe', cls?.name)}${row('Perícias', skills.join(', '))}${row('Poderes', powers.join(', '))}${row('Divindade', ALT_DEVOTIONS[cr.god]?.label ?? cr.god)}
   </dl>
   ${issues.length ? `<div class="t20tk-wz-issues"><b>Ainda falta</b><ul>${issues.map(i => `<li><button type="button" class="t20tk-bz-link" data-action="wzStep" data-step="${i.step}">${escapeHtml(i.text)}</button></li>`).join('')}</ul></div>` : '<p class="t20tk-bz-note">Tudo pronto. Se a raça tiver atributos à escolha, o sistema pergunta ao criar.</p>'}</div>`;
@@ -493,7 +543,14 @@ function renderPicker(app, cr) {
   const current = valueAt(cr, pk.path);
   const text = p => strip(p.description).replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, '$1');
   let filters = '', list, count;
-  if (pk.pool === 'spell') {
+  if (pk.pool === 'gear') {
+    const GEAR_TYPES = { arma: 'Arma', equipamento: 'Equipamento', consumivel: 'Consumível', tesouro: 'Tesouro' };
+    const all = idx.gear ?? [];
+    const rows = all.filter(g => (!q || g.key.includes(q)) && (!f.type || g.type === f.type));
+    filters = oneFilter(app, 'pick', 'type', 'Tipo', Object.entries(GEAR_TYPES).map(([value, label]) => ({ value, label })));
+    count = `${rows.length} itens`;
+    list = rows.slice(0, 300).map(g => card({ img: g.img, name: g.name, sub: GEAR_TYPES[g.type] ?? '', tags: [{ text: g.packLabel }], selected: current === g.uuid, value: g.uuid, kind: 'pick' })).join('');
+  } else if (pk.pool === 'spell') {
     const all = (w.spells ?? []).filter(spellSlotFilter({ type: pk.type || undefined, school: pk.school || undefined, names: pk.names ? pk.names.split('|') : null }));
     const rows = all.filter(s => (!q || s.key.includes(q)) && (!f.type || s.type === f.type) && (!f.school || s.school === f.school));
     const types = [...new Set(all.map(s => s.type))].filter(t => SPELL_TYPES[t]);
@@ -513,7 +570,7 @@ function renderPicker(app, cr) {
     count = `${rows.length} poderes`;
     const pctx = creationPrereqContext(idx, cr);
     // Poder geral à escolha de uma origem ("um poder de combate", "um poder da Tormenta"): precisa cumprir os pré-requisitos (JdA p. 85).
-    const strict = ['combate', 'tormenta'].includes(pk.pool);
+    const strict = ['combate', 'tormenta', 'origemPropria'].includes(pk.pool);
     list = rows.map(p => {
       const pre = prerequisiteText(p.description);
       const t = text(p);
@@ -710,6 +767,12 @@ export const WIZARD_ACTIONS = {
     const next = cur.includes(v) ? cur.filter(x => x !== v) : (cur.length < age.complications ? [...cur, v] : cur);
     await patch(this, { ageComps: next });
   },
+  /** Origem própria: tipo do benefício (perícia, poder ou poder único). Trocar o tipo limpa o valor. */
+  async wzCustomKind(event, target) {
+    const { path, value } = target.dataset;
+    const cur = valueAt(readCreation(this.actor), path) ?? {};
+    await patch(this, { [path]: cur.kind === value ? { kind: '' } : { kind: value, value: '', name: cur.name ?? '', text: cur.text ?? '' } });
+  },
   wzSlot(event, target) { wizardState(this).slot = Number(target.dataset.value); this.render(); },
   /** Poder concedido: alterna; com dois (clérigo, druida, paladino) preenche a vaga livre. */
   async wzGodPower(event, target) {
@@ -765,5 +828,7 @@ export function bindWizard(app, root) {
     timer = setTimeout(() => { wizardState(app).q[input.dataset.wzq] = input.value; wizardState(app).view[input.dataset.wzq] = 'list'; app.render(); }, 150);
   }));
   root.querySelectorAll('input[data-wzmethod]').forEach(r => r.addEventListener('change', () => patch(app, { method: r.value, '-=assign': null })));
+  // Textos da origem própria: grava ao sair do campo (change), não a cada tecla.
+  root.querySelectorAll('[data-wzinput]').forEach(el => el.addEventListener('change', () => patch(app, { [el.dataset.wzinput]: el.value })));
   root.querySelectorAll('input[data-wzcheck]').forEach(cb => cb.addEventListener('change', () => patch(app, { [cb.dataset.wzcheck]: cb.checked })));
 }

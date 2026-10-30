@@ -93,6 +93,9 @@
 .t20tk-wz-row { display: grid; grid-template-columns: 130px minmax(0, 1fr); align-items: center; gap: 8px 12px; }
 .t20tk-wz-row > span { font-size: 11px; font-weight: 700; color: var(--t20-text-secondary); }
 .t20tk-wz-row > .t20tk-wz-seg { justify-self: start; }
+.t20tk-wz-stack { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.t20tk-bz .t20tk-wz-text { width: 100%; min-height: 34px; font: inherit; }
+.t20tk-bz textarea.t20tk-wz-text { resize: vertical; padding: 6px 8px; }
 .t20tk-wz-row > .t20tk-wz-seg + * { grid-column: 2; }
 .t20tk-bz .t20tk-wz-row select { width: 100%; }
 .t20tk-wz-chips { display: flex; flex-wrap: wrap; gap: 5px; }
