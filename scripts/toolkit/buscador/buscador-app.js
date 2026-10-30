@@ -7,7 +7,7 @@ import { watchActor } from '../ui/live-refresh.js';
 import { enrichDescription } from '../ui/enrich.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { MODULE_ID } from '../../constants.js';
-import { SPELL_TYPES, SPELL_SCHOOLS, CIRCLES, fold, escapeHtml, actorClasses, arcanistPaths, actorSpells } from '../core/t20.js';
+import { SPELL_TYPES, SPELL_SCHOOLS, CIRCLES, fold, escapeHtml, actorClasses, arcanistPaths, actorSpells, actorPowers } from '../core/t20.js';
 import { buildCasterProfiles, evaluateSpell, learningCapacity, necromancerRatioOk, CASTER_CLASSES } from '../core/caster-rules.js';
 import { getSpellCatalog } from '../core/spells/spell-catalog.js';
 import { readSchools, casterContext } from '../core/caster-context.js';
@@ -40,6 +40,7 @@ export class BuscadorApp extends ApplicationV2 {
       theme: BuscadorApp.#onTheme,
       t20nav: onNavigate,
       saveSchools: BuscadorApp.#onSaveSchools,
+      saveDuplo: BuscadorApp.#onSaveDuplo,
       reload: BuscadorApp.#onReload,
       openSheet: BuscadorApp.#onOpenSheet,
       circle: BuscadorApp.#onCircle,
@@ -166,7 +167,7 @@ export class BuscadorApp extends ApplicationV2 {
     if (!this.actor) return '';
     const { profiles, capacity } = this.ctx;
     if (!profiles.length) {
-      return `<section class="t20tk-bz-profiles"><p class="t20tk-bz-warn">Nenhuma classe conjuradora reconhecida na ficha. Classes conhecidas: ${Object.values(CASTER_CLASSES).map(c => c.label).join(', ')}.</p></section>`;
+      return `<section class="t20tk-bz-profiles"><p class="t20tk-bz-warn">Nenhuma classe conjuradora reconhecida na ficha. Classes conhecidas: ${Object.values(CASTER_CLASSES).map(c => c.label).join(', ')}.</p>${this.#renderDuploPicker()}</section>`;
     }
     const cards = profiles.map(p => {
       const schools = p.schoolsRequired ? this.#renderSchoolPicker(p) : '';
@@ -193,10 +194,22 @@ export class BuscadorApp extends ApplicationV2 {
     const summary = profiles.map(p => `${escapeHtml(p.label)} ${p.level} · até ${p.maxCircle}º`).join(' / ');
     return `<details class="t20tk-disclosure t20tk-profile-box" data-region="profile" ${open ? 'open' : ''}>
       <summary><span class="t20tk-profile-sum"><b>${summary}</b><span class="t20tk-bz-capacity ${capClass}">${capText}</span></span></summary>
-      <div class="t20tk-disclosure-body"><section class="t20tk-bz-profiles">${cards}
+      <div class="t20tk-disclosure-body"><section class="t20tk-bz-profiles">${cards}${this.#renderDuploPicker()}
         <div class="t20tk-bz-capacity ${capClass}">${extraText ? extraText.replace(/^ · /, '') + ' · ' : ''}<small>Magias ganhas por poderes ou raça também contam aqui; o mestre decide nesses casos.</small></div>
       </section></div>
     </details>`;
+  }
+
+  /** Duplo Feérico (Atlas de Arton p. 472): de que classe é a habilidade de 1º nível (só Magias vira perfil). */
+  #renderDuploPicker() {
+    if (!actorPowers(this.actor).some(p => fold(p.name) === 'duplo feerico')) return '';
+    const cur = fold(this.actor.getFlag(MODULE_ID, 'duploFeericoClass') ?? '');
+    const own = new Set(this.ctx.classes.map(c => c.key));
+    const opts = Object.entries(CASTER_CLASSES).filter(([k, d]) => !own.has(k) && !d.usurper)
+      .map(([k, d]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>Magias (${escapeHtml(d.label)})</option>`).join('');
+    return `<fieldset class="t20tk-bz-schools"><legend>Duplo Feérico: habilidade de 1º nível de outra classe</legend>
+      <div><select name="duplo-feerico"><option value="">Outra habilidade (sem magias)</option>${opts}</select></div>
+      <button type="button" class="t20tk-ui-button" data-action="saveDuplo">Salvar</button></fieldset>`;
   }
 
   #renderSchoolPicker(p) {
@@ -359,6 +372,12 @@ export class BuscadorApp extends ApplicationV2 {
     const all = { ...readSchools(this.actor), [id]: boxes };
     await this.actor.setFlag(MODULE_ID, 'casting.schools', all);
     ui.notifications.info('Escolas salvas.');
+    this.render();
+  }
+
+  static async #onSaveDuplo() {
+    const value = this.element.querySelector('select[name="duplo-feerico"]')?.value ?? '';
+    await this.actor.setFlag(MODULE_ID, 'duploFeericoClass', value);
     this.render();
   }
 

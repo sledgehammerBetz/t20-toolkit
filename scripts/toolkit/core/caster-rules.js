@@ -35,21 +35,23 @@ export function maxCircle(table, level) {
  * Monta os perfis de conjurador a partir de dados simples.
  * @param {{classes:{name:string,level:number}[], arcanistPaths:string[], schoolsByClass?:Record<string,string[]>}} input
  */
-export function buildCasterProfiles({ classes = [], arcanistPaths = [], schoolsByClass = {} }) {
+export function buildCasterProfiles({ classes = [], arcanistPaths = [], schoolsByClass = {}, extra = [] }) {
   const profiles = [];
-  for (const cls of classes) {
+  // `extra`: Magias vindas de poderes de outra classe (core/class-levels.js, crossClassCasters).
+  for (const cls of [...classes, ...extra.map(x => ({ ...x, name: x.cls, extra: x }))]) {
     const id = fold(cls.name);
     const def = CASTER_CLASSES[id];
     if (!def) continue;
     const level = cls.level;
     const circles = maxCircle(def.table, level);
     const profile = {
-      id, label: def.label, level, tradition: def.tradition, maxCircle: circles,
-      key: def.key, known: def.known(level), source: def.source, warnings: [], notes: [],
+      id, label: cls.extra ? `${def.label} (${cls.extra.label})` : def.label,
+      level, tradition: def.tradition, maxCircle: circles,
+      key: def.key, known: cls.extra?.known ?? def.known(level), source: cls.extra?.source ?? def.source, warnings: [], notes: [...(cls.extra?.notes ?? [])],
       schools: null, schoolsRequired: def.schools ?? 0,
       necromancer: !!def.necromancer, usurper: !!def.usurper, path: null
     };
-    if (id === 'arcanista') {
+    if (id === 'arcanista' && !cls.extra) {
       if (arcanistPaths.length > 1) profile.warnings.push(`A ficha tem mais de um Caminho do Arcanista (${arcanistPaths.join(', ')}). Remova o que não vale.`);
       else if (arcanistPaths.length === 0) profile.warnings.push('Falta o poder "Caminho do Arcanista" na ficha. Usando a regra básica (Bruxo).');
       const path = arcanistPaths.length === 1 ? arcanistPaths[0] : null;

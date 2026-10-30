@@ -12,6 +12,9 @@ import { MODULE_ID } from '../../constants.js';
 import { escapeHtml, fold, actorClasses, arcanistPaths } from '../core/t20.js';
 import { buildCasterProfiles } from '../core/caster-rules.js';
 import { getPlannerIndex } from '../core/spell-index.js';
+import { classLevelMap, grantedAbilityKeys, CROSS_CLASS_SOURCES } from '../core/class-levels.js';
+import { crossClassExtra } from '../core/caster-context.js';
+import { viaSlots, viaFlag, viaCtx, isAlmaLivrePick, almaLivre } from './cross-class.js';
 import { devotionCheck, mustBeDevout } from '../core/gods.js';
 import { BASE_CLASSES, progressionFor, classInfo, gainsAt, buildTimeline, prerequisiteText, evaluatePrerequisites } from './planner-rules.js';
 import { toolFrame, onNavigate, switchTheme, reopen } from '../ui/frame.js';
@@ -87,11 +90,11 @@ export class PlannerApp extends ApplicationV2 {
   prereqContext(level) {
     const c = this.ctxData;
     const actor = this.actor;
-    const classLevels = Object.fromEntries(c.classes.map(x => [x.key, x.level]));
+    const own = Object.fromEntries(c.classes.map(x => [x.key, x.level]));
     const powers = new Set([...(actor?.items ?? [])].filter(i => i.type === 'poder').map(i => fold(i.name)));
     for (const row of c.timeline) {
       if (row.done || row.level > level || !row.cls) continue;
-      classLevels[fold(row.cls)] = row.classLevel;
+      own[fold(row.cls)] = row.classLevel;
       const p = c.plan[row.level]?.picks ?? {};
       for (const uuid of Object.values(p)) { const pw = this.index.powerByUuid.get(uuid); if (pw && row.level < level) powers.add(pw.key); }
       for (const g of gainsAt(row.cls, row.classLevel).gains) if (g.kind === 'ability' && row.level < level) powers.add(fold(g.item));
@@ -119,9 +122,13 @@ export class PlannerApp extends ApplicationV2 {
         if (a) attributes[a] = (attributes[a] ?? 0) + 1;
       }
     }
-    const profiles = buildCasterProfiles({ classes: Object.entries(classLevels).map(([k, lv]) => ({ name: k, level: lv })), arcanistPaths: arcanistPaths(actor) });
+    // Variantes contam como a classe básica (HA p. 21); poderes que dão habilidades de outra classe contam como tê-las.
+    const ownClasses = Object.entries(own).map(([name, lv]) => ({ name, level: lv }));
+    const classLevels = classLevelMap(ownClasses);
+    for (const k of grantedAbilityKeys([...powers])) powers.add(k);
+    const profiles = buildCasterProfiles({ classes: ownClasses, arcanistPaths: arcanistPaths(actor), extra: crossClassExtra(actor, ownClasses) });
     return {
-      attributes, classLevels, totalLevel: level, powers, skills, maxCircle: Math.max(0, ...profiles.map(p => p.maxCircle)),
+      attributes, classLevels, ownClasses: Object.keys(own), totalLevel: level, powers, skills, maxCircle: Math.max(0, ...profiles.map(p => p.maxCircle)),
       knownPowerNames: new Set(this.index.powers.map(p => p.key))
     };
   }
@@ -185,7 +192,8 @@ export class PlannerApp extends ApplicationV2 {
         sub = [...new Set(g.gains.map(x => KIND[x.kind]).filter(Boolean))].join(', ') || 'só o nível';
         const picks = c.plan[r.level]?.picks ?? {};
         const ig = intSkillGain(this, r.level);
-        const missing = g.gains.some(x => ['power', 'path'].includes(x.kind) && !picks[x.id]) || ig.picks.length < ig.want;
+        const missing = g.gains.some(x => ['power', 'path'].includes(x.kind) && !picks[x.id]) || ig.picks.length < ig.want
+          || viaSlots(this, r.level, r, c.plan[r.level]).some(x => !picks[x.id]);
         status = missing ? 'missing' : 'ok';
       } else { title = 'Sem classe'; sub = r.level === c.current + 1 ? 'próximo nível' : 'sem plano'; status = r.level === c.current + 1 ? 'next' : 'empty'; }
       return `<li><button type="button" data-action="pickLevel" data-level="${r.level}" aria-current="${sel ? 'step' : 'false'}" data-state="${status}">
@@ -290,8 +298,11 @@ export class PlannerApp extends ApplicationV2 {
       if (!doc) return;
       const data = game.items.fromCompendium(doc);
       foundry.utils.setProperty(data, `flags.${MODULE_ID}.extraGain`, true);
+      // Poder de outra classe dado por um poder da ficha (Cavaleiro Sagrado, Diferentão...): guarda a fonte.
+      const def = x.type === 'classe' && x.via ? CROSS_CLASS_SOURCES[x.via] : null;
+      if (def) foundry.utils.setProperty(data, `flags.${MODULE_ID}.via`, viaFlag(def, { subtipo: doc.system?.subtipo }));
       const [item] = await actor.createEmbeddedDocuments('Item', [data]);
-      entry = { type: x.type, itemId: item?.id, label: doc.name, img: doc.img };
+      entry = { type: x.type, itemId: item?.id, label: def ? `${doc.name} (por ${def.name})` : doc.name, img: doc.img };
     }
     entry = { ...entry, kindLabel: KIND[x.type], reason, level, by: game.user?.name ?? '' };
     const list = [...(actor.getFlag(MODULE_ID, 'extraGains') ?? []), entry];
@@ -326,13 +337,23 @@ export class PlannerApp extends ApplicationV2 {
     const row = c.timeline.find(r => r.level === level);
     const entry = c.plan[level] ?? {};
     const g = gainsAt(row.cls, row.classLevel);
-    const missing = g.gains.filter(x => (x.kind === 'power' || x.kind === 'path') && !entry.picks?.[x.id]).map(x => x.label);
+    const slots = viaSlots(this, level, row, entry);
+    const missing = [...g.gains, ...slots].filter(x => (x.kind === 'power' || x.kind === 'path') && !entry.picks?.[x.id]).map(x => x.label);
     const ig = intSkillGain(this, level);
     if (ig.picks.length < ig.want) missing.push(`${ig.want - ig.picks.length} perícia(s) por Inteligência`);
     const summary = [];
     const ctx = this.prereqContext(level);
-    const unmet = Object.values(entry.picks ?? {}).filter(Boolean).map(u => this.index.powerByUuid.get(u))
-      .filter(p => p && evaluatePrerequisites(prerequisiteText(p.description), ctx).status === 'missing');
+    // Poder de outra classe: nível efetivo da fonte (vaga extra) ou da Alma Livre (vaga normal).
+    const viaOf = {};
+    for (const x of slots) { const p = this.index.powerByUuid.get(entry.picks?.[x.id]); if (p) viaOf[x.id] = { def: x.def, p }; }
+    for (const x of g.gains) {
+      const p = x.kind === 'power' ? this.index.powerByUuid.get(entry.picks?.[x.id]) : null;
+      if (p && isAlmaLivrePick(this, ctx, p, x.powerClass || row.cls)) viaOf[x.id] = { def: almaLivre, p };
+    }
+    const slotIds = new Set([...g.gains, ...slots].map(x => x.id)); // vaga de fonte removida deixa escolha órfã no plano
+    const unmet = Object.entries(entry.picks ?? {}).filter(([gid, u]) => u && slotIds.has(gid)).map(([gid, u]) => [gid, this.index.powerByUuid.get(u)])
+      .filter(([gid, p]) => p && evaluatePrerequisites(prerequisiteText(p.description), viaOf[gid] ? viaCtx(ctx, viaOf[gid].def, p) : ctx).status === 'missing')
+      .map(([, p]) => p);
     const ok = await foundry.applications.api.DialogV2.confirm({
       window: { title: `Aplicar ${level}º nível` },
       content: `<p>Subir <b>${escapeHtml(actor.name)}</b> para o ${level}º nível como <b>${escapeHtml(row.cls)} ${row.classLevel}</b>?</p>
@@ -361,15 +382,16 @@ export class PlannerApp extends ApplicationV2 {
       summary.push(`${row.cls} ${row.classLevel}`);
       // 2) Habilidades do nível e escolhas
       const uuids = [];
-      for (const gain of g.gains) {
+      for (const gain of [...g.gains, ...slots]) {
         let uuid = null;
         if (gain.kind === 'ability' && !this.ownsPower(gain.item)) uuid = this.findAbility(row.cls, gain.item)?.uuid;
         if ((gain.kind === 'power' || gain.kind === 'path') && entry.picks?.[gain.id]) uuid = entry.picks[gain.id];
-        if (uuid) uuids.push(uuid);
+        if (uuid) uuids.push({ uuid, via: viaOf[gain.id] ? viaFlag(viaOf[gain.id].def, viaOf[gain.id].p) : null });
       }
-      const toCreate = (await Promise.all(uuids.map(u => fromUuid(u)))).filter(Boolean).map(doc => {
+      const toCreate = (await Promise.all(uuids.map(async u => [await fromUuid(u.uuid), u.via]))).filter(([doc]) => doc).map(([doc, via]) => {
         const data = game.items.fromCompendium(doc);
         foundry.utils.setProperty(data, `flags.${MODULE_ID}.plannerLevel`, level);
+        if (via) foundry.utils.setProperty(data, `flags.${MODULE_ID}.via`, via);
         return data;
       });
       if (toCreate.length) {
