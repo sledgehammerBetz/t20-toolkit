@@ -20,7 +20,28 @@ export const EXCLUDED_CLASS_POWERS = Object.freeze({
   usurpador: ['conhecimento magico']
 });
 
-export const excludedPower = (className, powerKey) => (EXCLUDED_CLASS_POWERS[fold(className)] ?? []).includes(powerKey);
+/** No compêndio o nome traz a classe ("Conhecimento Mágico (Clérigo)"): compara pelo começo do nome. */
+export const excludedPower = (className, powerKey) => (EXCLUDED_CLASS_POWERS[fold(className)] ?? []).some(k => powerKey === k || String(powerKey).startsWith(`${k} (`));
+
+/** Poder que pode ser escolhido mais de uma vez ("pode escolher este poder outras vezes", "quantas vezes quiser"). */
+export function isRepeatable(html) {
+  const text = String(html ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  return /escolher (?:este|esse) poder (?:outras vezes|v[aá]rias vezes|quantas vezes quiser|mais de uma vez)/i.test(text);
+}
+
+/**
+ * Poder de raça (Heróis de Arton p. 84): o pré-requisito é pertencer à raça, que o compêndio guarda no subtipo.
+ * `subtipo` e `race` normalizados. true = é da raça; false = de outra raça; null = conferir (herança, "Várias", sem raça).
+ */
+export function racePowerOk(subtipo, race) {
+  const sub = fold(subtipo);
+  if (!sub || sub === 'varias') return null;
+  const r = fold(race);
+  if (!r) return null;
+  if (sub === r || sub.split('/').map(s => s.trim()).includes(r) || r.split('/').map(s => s.trim()).includes(sub)) return true;
+  if (sub.startsWith(`${r} `) || r.startsWith(`${sub} `)) return null; // Moreau do Lobo, Qareen de Luz...
+  return false;
+}
 
 /** Tabela de níveis da classe (ou null). */
 export function progressionFor(className) {
@@ -74,7 +95,8 @@ export function buildTimeline(sheetClasses, planned, max = 20) {
 export function prerequisiteText(html) {
   const text = String(html ?? '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
   const decoded = text.replace(/&([a-z]+);/gi, (m, e) => ({ eacute: 'é', aacute: 'á', iacute: 'í', oacute: 'ó', uacute: 'ú', atilde: 'ã', otilde: 'õ', ccedil: 'ç', ecirc: 'ê', ocirc: 'ô', acirc: 'â', ordm: 'º', deg: 'º', agrave: 'à' }[e.toLowerCase()] ?? m));
-  const m = decoded.match(/Pr[ée]-?\s?requis+itos?\s*:\s*([^.]*(?:\.\d[^.]*)*)\./i);
+  // Termina no ponto ou no fim do texto (vários poderes trazem o pré-requisito como última linha, sem ponto).
+  const m = decoded.match(/Pr[ée]-?\s?requis+itos?\s*:\s*([^.]*(?:\.\d[^.]*)*)(?:\.|$)/i);
   return m ? m[1].trim() : '';
 }
 
@@ -101,8 +123,10 @@ export function evaluatePrerequisites(text, ctx) {
     }
     m = f.match(/^(for|des|con|int|sab|car)\s*(-?\d+)$/);
     if (m) return (ctx.attributes[ATTR[m[1]]] ?? 0) >= Number(m[2]);
-    m = f.match(/^lancar magias de (\d)º circulo$/);
+    m = f.match(/^lancar magias de (\d)[ºo°]? circulo$/);
     if (m) return (ctx.maxCircle ?? 0) >= Number(m[1]);
+    if (f === 'lancar magias') return (ctx.maxCircle ?? 0) >= 1 || null; // magias de raça ou poder não entram no círculo
+
     m = f.match(/^treinad[oa] em (.+)$/);
     if (m) {
       const skill = norm(m[1]);
@@ -124,5 +148,23 @@ export function evaluatePrerequisites(text, ctx) {
     return { text: piece, ok };
   });
   const status = parts.some(p => p.ok === false) ? 'missing' : parts.some(p => p.ok === null) ? 'review' : 'ok';
+  return { status, parts };
+}
+
+/** Subtipos de poder geral que não são raça (categorias do JdA e de Heróis de Arton). */
+const NON_RACE_SUBTYPES = new Set(['', 'combate', 'destino', 'magia', 'tormenta', 'grupo', 'geupo', 'parceiro', 'parceiros', 'montaria', 'varias']);
+
+/**
+ * Pré-requisitos de um poder do índice (`{ tipo, subtipo, description }`), com a raça dos poderes de raça.
+ * `ctx.race`: nome da raça da ficha.
+ */
+export function evaluatePower(p, ctx) {
+  const ev = evaluatePrerequisites(prerequisiteText(p?.description), ctx);
+  if (p?.tipo !== 'geral' || NON_RACE_SUBTYPES.has(fold(p.subtipo))) return ev;
+  const ok = racePowerOk(p.subtipo, ctx?.race);
+  if (ok === null && !ctx?.race) return ev;
+  const label = String(p.subtipo).replace(/(^|[\s/])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+  const parts = [{ text: `Raça: ${label}`, ok }, ...ev.parts];
+  const status = parts.some(x => x.ok === false) ? 'missing' : parts.some(x => x.ok === null) ? 'review' : 'ok';
   return { status, parts };
 }

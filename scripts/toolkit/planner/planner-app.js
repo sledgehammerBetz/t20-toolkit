@@ -16,7 +16,7 @@ import { classLevelMap, grantedAbilityKeys, CROSS_CLASS_SOURCES } from '../core/
 import { crossClassExtra } from '../core/caster-context.js';
 import { viaSlots, viaFlag, viaCtx, isAlmaLivrePick, almaLivre } from './cross-class.js';
 import { devotionCheck, mustBeDevout } from '../core/gods.js';
-import { BASE_CLASSES, progressionFor, classInfo, gainsAt, buildTimeline, prerequisiteText, evaluatePrerequisites, excludedPower } from './planner-rules.js';
+import { BASE_CLASSES, progressionFor, classInfo, gainsAt, buildTimeline, evaluatePower, excludedPower } from './planner-rules.js';
 import { toolFrame, onNavigate, switchTheme, reopen } from '../ui/frame.js';
 import { postCard } from '../ui/chat.js';
 import { disclosure } from '../ui/components.js';
@@ -133,6 +133,7 @@ export class PlannerApp extends ApplicationV2 {
     const profiles = buildCasterProfiles({ classes: ownClasses, arcanistPaths: arcanistPaths(actor), extra: crossClassExtra(actor, ownClasses) });
     return {
       attributes, classLevels, ownClasses: Object.keys(own), totalLevel: level, powers, skills, maxCircle: Math.max(0, ...profiles.map(p => p.maxCircle)),
+      race: [...(actor?.items ?? [])].find(i => i.type === 'race')?.name ?? '',
       knownPowerNames: new Set(this.index.powers.map(p => p.key))
     };
   }
@@ -374,7 +375,7 @@ export class PlannerApp extends ApplicationV2 {
     }
     const slotIds = new Set([...g.gains, ...slots].map(x => x.id)); // vaga de fonte removida deixa escolha órfã no plano
     const unmet = Object.entries(entry.picks ?? {}).filter(([gid, u]) => u && slotIds.has(gid)).map(([gid, u]) => [gid, this.index.powerByUuid.get(u)])
-      .filter(([gid, p]) => p && evaluatePrerequisites(prerequisiteText(p.description), viaOf[gid] ? viaCtx(ctx, viaOf[gid].def, p) : ctx).status === 'missing')
+      .filter(([gid, p]) => p && evaluatePower(p, viaOf[gid] ? viaCtx(ctx, viaOf[gid].def, p) : ctx).status === 'missing')
       .map(([, p]) => p);
     const ok = await foundry.applications.api.DialogV2.confirm({
       window: { title: `Aplicar ${level}º nível` },

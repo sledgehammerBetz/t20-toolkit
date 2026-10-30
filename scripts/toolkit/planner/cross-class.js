@@ -50,14 +50,36 @@ export function viaPool(app, def, ctx) {
 export const viaCtx = (ctx, def, p) => (def && p?.tipo === 'classe' ? overlayClassLevel(ctx, def, p.subtipo) : ctx);
 
 /**
- * Alma Livre: nas vagas de poder de classe, os poderes da classe escolhida também entram.
- * Vale se o personagem tem Alma Livre na ficha ou planejada antes deste nível.
+ * Onde o único poder da Alma Livre já foi usado: na ficha (marca `via`) ou no plano, fora da vaga `skip` ({ level, gain }).
+ * Devolve um texto ("na ficha", "8º nível") ou ''.
  */
-export function almaLivreOptions(app, ctx, slotClass) {
-  if (!ctx.powers.has(ALMA_LIVRE)) return { cls: '', options: [] };
+export function almaLivreUsed(app, skip = {}) {
+  if ([...(app.actor?.items ?? [])].some(i => i.type === 'poder' && i.flags?.[MODULE_ID]?.via?.source === almaLivre.name)) return 'na ficha';
   const cls = almaLivreClass(app.actor);
-  if (!cls || cls === baseClassKey(slotClass)) return { cls, options: [] };
-  return { cls, options: app.index.powers.filter(p => p.tipo === 'classe' && fold(p.subtipo) === cls) };
+  if (!cls) return '';
+  for (const row of app.ctxData?.timeline ?? []) {
+    if (row.done || !row.cls) continue;
+    const entry = app.ctxData.plan?.[row.level];
+    for (const g of gainsAt(row.cls, row.classLevel).gains) {
+      if (g.kind !== 'power' || (row.level === skip.level && g.id === skip.gain)) continue;
+      const p = app.index.powerByUuid.get(entry?.picks?.[g.id]);
+      if (p?.tipo === 'classe' && fold(p.subtipo) === cls && cls !== baseClassKey(g.powerClass || row.cls)) return `${row.level}º nível`;
+    }
+  }
+  return '';
+}
+
+/**
+ * Alma Livre (HA p. 80): um único poder da classe escolhida pode entrar numa vaga de poder de classe.
+ * Vale se o personagem tem Alma Livre na ficha ou planejada antes deste nível; some depois de usado (`used`).
+ */
+export function almaLivreOptions(app, ctx, slotClass, skip = {}) {
+  if (!ctx.powers.has(ALMA_LIVRE)) return { cls: '', options: [], used: '' };
+  const cls = almaLivreClass(app.actor);
+  if (!cls || cls === baseClassKey(slotClass)) return { cls, options: [], used: '' };
+  const used = almaLivreUsed(app, skip);
+  if (used) return { cls, options: [], used };
+  return { cls, options: app.index.powers.filter(p => p.tipo === 'classe' && fold(p.subtipo) === cls), used: '' };
 }
 
 /** Poder de vaga normal que veio pela Alma Livre (é da classe escolhida, não da classe da vaga). */
