@@ -7,7 +7,7 @@ import { draftUpdate } from './plan-draft.js';
 import { MODULE_ID } from '../../constants.js';
 import { escapeHtml, fold, SPELL_SCHOOLS, plainText } from '../core/t20.js';
 import { ATTRS, ATTR_LABELS } from './creation-rules.js';
-import { ORIGINS } from './origins.js';
+import { ORIGINS, findOriginPower } from './origins.js';
 import { ORIGIN_ITEMS } from './origin-items.js';
 import { gainsAt, classSkills, classInfo, prerequisiteText } from './planner-rules.js';
 import { GENERAL_CATS, catOf } from './level-view.js';
@@ -234,7 +234,7 @@ function stepOrigin(app, cr, rules, info) {
       const pw = idx.powers.find(x => x.tipo === 'origem' && x.key === fold(origin.fixed.power));
       detail = `<p class="t20tk-bz-note">${origin.region ? `Origem regional (${escapeHtml(origin.region)}) do ${escapeHtml(origin.source)}` : `Origem especial de ${escapeHtml(origin.source)}`}: benefício fixo.</p>
         ${origin.note ? `<p class="t20tk-bz-warn">${escapeHtml(origin.note)}</p>` : ''}
-        <ul class="t20tk-wz-abil"><li><b>${escapeHtml(origin.fixed.power)}</b><small>${pw ? escapeHtml(strip(pw.description).replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, '$1')) : 'poder de origem — não está nos compêndios ativos'}</small></li>${origin.fixed.skills.length ? `<li><b>Treinado em</b><small>${origin.fixed.skills.map(escapeHtml).join(', ')}</small></li>` : ''}</ul>
+        <ul class="t20tk-wz-abil"><li><b>${escapeHtml(origin.fixed.power)}</b><small>${pw ? escapeHtml(strip(pw.description).replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, '$1')) : origin.text ? `${escapeHtml(origin.text)} (o Toolkit cria o poder na ficha: não está no Suplementos de Arton)` : 'poder de origem — não está nos compêndios ativos'}</small></li>${origin.fixed.skills.length ? `<li><b>Treinado em</b><small>${origin.fixed.skills.map(escapeHtml).join(', ')}</small></li>` : ''}</ul>
         ${needsCraft ? `<div class="t20tk-wz-row"><span>Qual Ofício</span>${craftChips(P.craft, S.craft, labels)}</div>` : ''}`;
     } else {
       const need = Math.min(2, age.originBenefits ?? 2);
@@ -244,7 +244,7 @@ function stepOrigin(app, cr, rules, info) {
       const skillTiles = origin.skills.map(s => tile(`skill:${s}`, s, 'perícia')).join('');
       const powerTiles = origin.powers.map(p => {
         if (/^um poder/i.test(p)) return tile(`generic:${p}`, p, 'poder à escolha');
-        const found = idx.powers.find(x => x.key === fold(p));
+        const found = findOriginPower(idx.powers, p);
         return found ? tile(`power:${found.uuid}`, p, 'poder') : `<li><span class="t20tk-wz-tile is-off"><b>${escapeHtml(p)}</b><small>não está no compêndio</small></span></li>`;
       }).join('');
       const craftNeeded = [...picks].some(x => /^skill:of[íi]cio$/i.test(x.trim()));
