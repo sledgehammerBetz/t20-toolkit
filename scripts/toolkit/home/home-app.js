@@ -14,7 +14,7 @@ import { TOOLKIT_FEATURES } from '../features.js';
 import { buildCasterProfiles, learningCapacity } from '../core/caster-rules.js';
 import { buildTimeline, gainsAt } from '../planner/planner-rules.js';
 import { getTableRules, retrainStatus } from '../core/table-rules.js';
-import { engenhocaState, isEngenhoca } from '../engenhocas/engenhocas-rules.js';
+import { engenhocaState, isEngenhoca, isInventorClass } from '../engenhocas/engenhocas-rules.js';
 import { dayKey } from '../grimorio/grimorio-rules.js';
 
 const ApplicationV2 = globalThis.foundry?.applications?.api?.ApplicationV2 ?? class {};
@@ -85,7 +85,9 @@ export function homeSummary(actor, { rules = getTableRules(), isGM = false, day 
 
   // Engenhocas
   const engs = items.filter(i => { try { return isEngenhoca(i); } catch { return false; } });
-  const inventor = classes.some(c => c.key === 'inventor');
+  // Alquimista (variante) só entra com o poder Engenhoqueiro: a variante não se dedica a engenhocas.
+  const engenhoqueiro = items.some(i => i.type === 'poder' && fold(i.name) === 'engenhoqueiro');
+  const inventor = classes.some(c => c.key === 'inventor') || (engenhoqueiro && classes.some(c => isInventorClass(c.name)));
   if (engs.length || inventor) {
     relevant.add('engenhocas');
     const jammed = engs.filter(i => { try { return engenhocaState(i).jammed; } catch { return false; } });

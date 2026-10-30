@@ -5,6 +5,8 @@
  *   Preço T$ 100 × PM da magia. Teste de Ofício (engenhoqueiro) CD 20 + PM.
  * Limite: Inteligência (+3 com Manutenção Eficiente, que também reduz o espaço para 0,5).
  * Item: Minúsculo, 1 espaço, Defesa 15, PV = metade dos PV do fabricante, RD 5; empunhada ou vestida.
+ * Nível de inventor: soma o Inventor e a variante Alquimista (Heróis de Arton p. 21: variante e classe básica são a mesma
+ *   classe, com a mesma lista de poderes e os mesmos pré-requisitos).
  * Ativação: só o fabricante; ação padrão (ou a execução da magia, o que for maior), Ofício (engenhoqueiro) CD 15 + PM, +5 por ativação no mesmo dia,
  *   +1 por PM de aprimoramento (limite de aprimoramentos = Int). Falha: enguiça (1 hora para consertar).
  * Aparatos: até 2 por engenhoca; 1 aparato +2 na CD, 2 aparatos +5 (Aparato Personalizado ignora o primeiro).
@@ -346,11 +348,14 @@ export const NEW_DAY_PATCH = Object.freeze({ usesToday: 0, refrigerationUsedToda
 
 const has = (names, wanted) => names.has(fold(wanted));
 
+/** Inventor e suas variantes (Heróis de Arton, Tabela 1-2). */
+export const INVENTOR_CLASSES = Object.freeze(['inventor', 'alquimista']);
+export const isInventorClass = name => INVENTOR_CLASSES.includes(fold(name));
+
 /** Contexto do inventor a partir da ficha (nomes de poderes e classes). */
 export function inventorContext({ classes = [], powerNames = [], int = 0, maxPV = 0, pda = 0, skillTrained = false }) {
   const names = new Set(powerNames.map(fold));
-  const inv = classes.find(c => fold(c.name) === 'inventor');
-  const level = inv?.level ?? 0;
+  const level = classes.filter(c => isInventorClass(c.name)).reduce((sum, c) => sum + (Number(c.level) || 0), 0);
   const manutencao = has(names, 'Manutenção Eficiente');
   return {
     level,
