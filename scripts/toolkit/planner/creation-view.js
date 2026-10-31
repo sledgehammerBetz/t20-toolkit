@@ -18,7 +18,7 @@ import { planFlag, draftUpdate } from './plan-draft.js';
 import { postCard, chatFlavor } from '../ui/chat.js';
 import { escapeHtml, fold } from '../core/t20.js';
 import { ATTRS, ATTR_LABELS, POINT_COST, stepPoint, validatePoints, parseClassSkills, skillKeyFor, intBonusSkills } from './creation-rules.js';
-import { ORIGINS, originPowerData } from './origins.js';
+import { originPowerData, originOf, customBenefits, customBenefitDone, customPowerData } from './origins.js';
 import { ORIGIN_ITEMS, originItemChoices, weaponOptions, findGear } from './origin-items.js';
 import { gainsAt, classSkills, classInfo } from './planner-rules.js';
 import { buildCasterProfiles } from '../core/caster-rules.js';
@@ -140,8 +140,9 @@ export function fxUuids(idx, cr, rules = getTableRules(), info = raceInfo(idx, c
   });
   for (const k of originSlots(cr, rules, info.noOrigin)) {
     const S = originSlot(cr, k);
-    const o = ORIGINS.find(x => x.name === S.origin);
+    const o = originOf(S);
     if (!o) continue;
+    if (o.custom) { customPicks(cr, S, rules).filter(b => b.kind === 'power').forEach(b => out.push(b.value)); continue; }
     if (o.fixed) { const pw = idx.powers.find(x => x.tipo === 'origem' && x.key === fold(o.fixed.power)); if (pw) out.push(pw.uuid); }
     S.picks.filter(x => x.startsWith('power:')).forEach(x => out.push(x.slice(6)));
     if (S.choice) out.push(S.choice);
@@ -239,14 +240,20 @@ export function finalAttributes(cr, race, rules = getTableRules(), bonus = {}, o
 /** Caminhos das flags de cada origem: a 1ª usa as chaves antigas; as extras ficam em extraOrigins.N. */
 export function slotPaths(k) {
   return k === 0
-    ? { origin: 'origin', picks: 'originPicks', craft: 'originCraft', choice: 'originChoice', items: 'originItems' }
-    : { origin: `extraOrigins.${k}.origin`, picks: `extraOrigins.${k}.picks`, craft: `extraOrigins.${k}.craft`, choice: `extraOrigins.${k}.choice`, items: `extraOrigins.${k}.items` };
+    ? { origin: 'origin', picks: 'originPicks', craft: 'originCraft', choice: 'originChoice', items: 'originItems', custom: 'originCustom' }
+    : { origin: `extraOrigins.${k}.origin`, picks: `extraOrigins.${k}.picks`, craft: `extraOrigins.${k}.craft`, choice: `extraOrigins.${k}.choice`, items: `extraOrigins.${k}.items`, custom: `extraOrigins.${k}.custom` };
 }
 export function originSlot(cr, k) {
-  if (k === 0) return { origin: cr.origin, picks: cr.originPicks ?? [], craft: cr.originCraft, choice: cr.originChoice, items: cr.originItems ?? {} };
+  if (k === 0) return { origin: cr.origin, picks: cr.originPicks ?? [], craft: cr.originCraft, choice: cr.originChoice, items: cr.originItems ?? {}, custom: cr.originCustom ?? {} };
   const x = cr.extraOrigins?.[k] ?? {};
-  return { origin: x.origin, picks: x.picks ?? [], craft: x.craft, choice: x.choice, items: x.items ?? {} };
+  return { origin: x.origin, picks: x.picks ?? [], craft: x.craft, choice: x.choice, items: x.items ?? {}, custom: x.custom ?? {} };
 }
+/** Benefícios valendo da origem própria da vaga (quantos a idade permite). */
+export function customPicks(cr, S, rules = getTableRules()) {
+  return customBenefits(S.custom, Math.min(2, ageFor(cr, rules).originBenefits ?? 2));
+}
+/** Itens do compêndio escolhidos para a origem própria (uuids). */
+export const customItems = S => Object.values(S.custom?.items ?? {}).filter(Boolean);
 export function originSlots(cr, rules = getTableRules(), noOrigin = false) {
   const age = ageFor(cr, rules);
   if (age.originBenefits === 0 || noOrigin) return [];
@@ -439,9 +446,10 @@ export function creationSkills(idx, cr, rules = getTableRules(), info = raceInfo
   };
   for (const k of originSlots(cr, rules, info.noOrigin)) {
     const S = originSlot(cr, k);
-    const origin = ORIGINS.find(o => o.name === S.origin);
+    const origin = originOf(S);
     if (!origin) continue;
-    if (origin.fixed) origin.fixed.skills.forEach(n => add(n, S.craft, 'Origem'));
+    if (origin.custom) customPicks(cr, S, rules).filter(b => b.kind === 'skill' && b.value).forEach(b => locked.push({ key: b.value, source: 'Origem' }));
+    else if (origin.fixed) origin.fixed.skills.forEach(n => add(n, S.craft, 'Origem'));
     else S.picks.filter(x => x.startsWith('skill:')).forEach(x => add(x.slice(6), S.craft, 'Origem'));
   }
   for (const c of info.choices) c.slots.forEach((slot, i) => {
@@ -504,8 +512,18 @@ export function creationIssues(app, cr) {
     const S = originSlot(cr, k);
     const label = rules.originsCount > 1 ? `origem ${k + 1}` : 'origem';
     if (!S.origin) { push('origin', label); continue; }
-    const o = ORIGINS.find(x => x.name === S.origin);
+    const o = originOf(S);
     const need = Math.min(2, age.originBenefits ?? 2);
+    if (o?.custom) {
+      if (!rules.customOrigins) push('origin', `${label}: origem própria desligada nas Regras da mesa`);
+      if (!S.custom?.name?.trim()) push('origin', `nome da ${label} própria`);
+      const bs = customPicks(cr, S, rules);
+      const left = bs.filter(b => !customBenefitDone(b)).length;
+      if (left) push('origin', `${left} benefício(s) de ${label}`);
+      const vals = bs.filter(b => b.kind !== 'unique' && b.value).map(b => `${b.kind}:${b.value}`);
+      if (new Set(vals).size < vals.length) push('origin', `${label}: benefícios repetidos`);
+      continue;
+    }
     if (!o?.special && !o?.fixed && S.picks.length !== need) push('origin', `${need} benefício(s) de ${label}`);
     if (originItemChoices(S.origin).some(e => !S.items?.[e.id])) push('origin', `itens de ${label}`);
     if (S.picks.some(x => x.startsWith('generic:')) && !S.choice) push('origin', `poder de ${label}`);
@@ -687,9 +705,17 @@ export async function applyCreation(app) {
     const origins = [];
     for (const k of originSlots(cr, rules, info.noOrigin)) {
       const S = originSlot(cr, k);
-      const origin = ORIGINS.find(o => o.name === S.origin);
+      const origin = originOf(S);
       if (!origin) continue;
       origins.push({ origin, S });
+      if (origin.custom) {
+        if (!rules.customOrigins) continue;
+        for (const b of customPicks(cr, S, rules)) {
+          if (b.kind === 'power' && b.value) queueFrom(b.value);
+          else if (b.kind === 'unique' && customBenefitDone(b)) queueData(customPowerData(b, origin.name));
+        }
+        continue;
+      }
       if (origin.fixed) {
         const power = idx.powers.find(x => x.tipo === 'origem' && x.key === fold(origin.fixed.power));
         if (power) queueFrom(power.uuid);
@@ -733,6 +759,11 @@ export async function applyCreation(app) {
     const notes = [];
     let money = 0;
     for (const { origin, S } of origins) {
+      if (origin.custom) {
+        customItems(S).forEach(u => queueFrom(u));
+        if (S.custom?.itemsNote?.trim()) notes.push(`${origin.name}: ${S.custom.itemsNote.trim()}`);
+        continue;
+      }
       const r = await queueOriginItems(actor, idx, origin.name, S, queueFrom);
       notes.push(...r.notes);
       money += r.money;
@@ -758,6 +789,9 @@ export async function applyCreation(app) {
       [`flags.${MODULE_ID}.creationRules`]: { ageRule: ageRuleFor(cr.ageRule, rules), age: ageRuleFor(cr.ageRule, rules) !== 'off' ? (cr.age || 'jovem') : null, noPhysicalIncrease: !!age.noPhysicalIncrease, extraLevels: age.levels || 0 },
       [`flags.${MODULE_ID}.plan.-=creation`]: null
     });
+    // Origem própria: guarda o que foi combinado (nome, história e benefícios), para consulta na ficha.
+    const own = origins.filter(o => o.origin.custom).map(({ origin, S }) => ({ name: origin.name, story: S.custom?.story ?? '', benefits: customPicks(cr, S, rules).map(b => b.kind === 'unique' ? { kind: 'unique', name: b.name } : { kind: b.kind, value: b.value }), itemsNote: S.custom?.itemsNote ?? '' }));
+    if (own.length) update[`flags.${MODULE_ID}.customOrigins`] = own;
     await actor.update(update);
     const raceName = race?.name ?? '';
     await postCard(actor, {
@@ -804,5 +838,6 @@ export async function undoCreation(actor, h, extra = {}) {
   upd['system.attributes.conjuracao'] = h.prev?.conjuracao ?? '';
   if (h.prev?.tp !== undefined) upd['system.dinheiro.tp'] = h.prev.tp;
   upd[`flags.${MODULE_ID}.-=creationRules`] = null;
+  upd[`flags.${MODULE_ID}.-=customOrigins`] = null;
   await Promise.all([ids.length ? actor.deleteEmbeddedDocuments('Item', ids) : null, actor.update({ ...upd, ...extra })]);
 }

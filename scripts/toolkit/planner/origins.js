@@ -1,4 +1,4 @@
-import { fold } from '../core/t20.js';
+import { fold, escapeHtml } from '../core/t20.js';
 
 /** Origens: 35 do Tormenta20 JdA (escolha 2 benefícios) e 30 de Heróis de Arton (cap. 1, "Novas origens":
  * benefício fixo = o poder de origem com o mesmo nome + as perícias em `fixed.skills`). */
@@ -1408,6 +1408,52 @@ export function originPowerData(origin) {
       subtipo: '',
       description: { value: `<p>${intro}</p>${benefit ? `<p><strong>Benefício.</strong> ${benefit}</p>` : ''}` },
       source: `T20 - ${origin.source}${origin.page ? ` (pág. ${origin.page})` : ''}`
+    }
+  };
+}
+
+/**
+ * Sua Própria Origem (Tormenta20 JdA p. 95): negociando com o mestre, o jogador monta a origem.
+ * Segue a base das origens (p. 84): dois benefícios, que podem ser perícias ou poderes (gerais, de origem ou um
+ * poder único inventado, "usando as outras como referência"). Itens combinados com o mestre.
+ * Na criação, a vaga guarda `origin: CUSTOM_ORIGIN` e os dados em `custom`:
+ * { name, story, b: { 0: { kind: 'skill'|'power'|'unique', value, name, text } , 1: {…} }, items: { n: uuid }, itemsNote }.
+ */
+export const CUSTOM_ORIGIN = '@propria';
+export const CUSTOM_ORIGIN_SOURCE = 'Sua Própria Origem (JdA p. 95)';
+
+/** Benefícios da origem própria, na ordem (só os que têm tipo). */
+export function customBenefits(custom, need = 2) {
+  return Array.from({ length: need }, (_, i) => custom?.b?.[i] ?? {});
+}
+
+/** Benefício preenchido? */
+export function customBenefitDone(b) {
+  if (b?.kind === 'unique') return !!(b.name?.trim() && b.text?.trim());
+  return !!(b?.kind && b.value);
+}
+
+/** Origem da vaga: a do livro ou a montada pelo jogador (com `custom: true`). */
+export function originOf(S) {
+  if (!S?.origin) return null;
+  if (S.origin !== CUSTOM_ORIGIN) return ORIGINS.find(o => o.name === S.origin) ?? null;
+  const c = S.custom ?? {};
+  return { name: c.name?.trim() || 'Origem própria', skills: [], powers: [], items: c.itemsNote ?? '', source: CUSTOM_ORIGIN_SOURCE, custom: true };
+}
+
+/** Nome da origem da vaga, para resumo e ficha. */
+export const originName = S => originOf(S)?.name ?? '';
+
+/** Poder único da origem própria, criado na ficha como poder de origem. */
+export function customPowerData(b, originLabel) {
+  return {
+    name: b.name.trim(),
+    type: 'poder',
+    system: {
+      tipo: 'origem',
+      subtipo: '',
+      description: { value: `<p>${b.text.trim().split(/\n+/).map(escapeHtml).join('</p><p>')}</p><p><em>Origem própria: ${escapeHtml(originLabel)}. Combinado com o mestre.</em></p>` },
+      source: CUSTOM_ORIGIN_SOURCE
     }
   };
 }
