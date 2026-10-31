@@ -6,7 +6,7 @@
  */
 import { MODULE_ID } from '../../constants.js';
 import { escapeHtml, fold, plainText } from '../core/t20.js';
-import { prerequisiteText, evaluatePrerequisites } from './planner-rules.js';
+import { prerequisiteText, evaluatePower, isRepeatable } from './planner-rules.js';
 import { getTableRules, retrainStatus } from '../core/table-rules.js';
 import { postCard } from '../ui/chat.js';
 import { powerCard, chipRow, toggleRow, bf, catOf, GENERAL_CATS } from './level-view.js';
@@ -114,8 +114,8 @@ function renderRetrainBrowser(app) {
     && (!f.group || groupOf(p) === f.group)
     && (!q || p.key.includes(q) || fold(p.description).includes(q))
     && (!f.cat || p.tipo !== 'geral' || catOf(p) === f.cat)
-    && (!f.hideOwned || !app.ownsPower(p.name))
-    && (!f.eligible || evaluatePrerequisites(prerequisiteText(p.description), ctx).status !== 'missing'));
+    && (!f.hideOwned || isRepeatable(p.description) || !app.ownsPower(p.name))
+    && (!f.eligible || evaluatePower(p, ctx).status !== 'missing'));
   const groups = ['classe', 'geral', 'distincao'].includes(old.system?.tipo)
     ? chipRow('Grupo', 'group', [['', 'Todos'], ['classe', 'De classe'], ['geral', 'Gerais'], ...(getTableRules().distinctions ? [['distincao', 'Distinções']] : [])], f.group) : '';
   const filters = `${groups}${chipRow('Categoria (poderes gerais)', 'cat', [['', 'Todas'], ...GENERAL_CATS], f.cat)}${toggleRow('Só os que cumpro (pré-requisitos)', 'eligible', f.eligible)}${toggleRow('Ocultar os que já tenho', 'hideOwned', f.hideOwned)}`;
@@ -157,7 +157,7 @@ export const RETRAIN_ACTIONS = {
     if (!old || !ref) return;
     const level = this.selected;
     const deps = dependentsOf(actor.items, old.name);
-    const ev = evaluatePrerequisites(prerequisiteText(ref.description), retrainContext(this, old));
+    const ev = evaluatePower(ref, retrainContext(this, old));
     const ok = await foundry.applications.api.DialogV2.confirm({
       window: { title: 'Retreino' },
       content: `<p>Trocar <b>${escapeHtml(old.name)}</b> por <b>${escapeHtml(ref.name)}</b> (${level}º nível)?</p>

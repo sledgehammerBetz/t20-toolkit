@@ -9,7 +9,7 @@ import { escapeHtml, fold, SPELL_SCHOOLS, plainText } from '../core/t20.js';
 import { ATTRS, ATTR_LABELS } from './creation-rules.js';
 import { ORIGINS, findOriginPower } from './origins.js';
 import { ORIGIN_ITEMS } from './origin-items.js';
-import { gainsAt, classSkills, classInfo, prerequisiteText } from './planner-rules.js';
+import { gainsAt, classSkills, classInfo, prerequisiteText, evaluatePower } from './planner-rules.js';
 import { GENERAL_CATS, catOf } from './level-view.js';
 import { devotionCheck, mustBeDevout, DEVOTEES, ALT_DEVOTIONS, altDevotionsFor, grantedPowerCount } from '../core/gods.js';
 import { GRANTED_POWERS, POWER_ALIASES } from '../usurpador/usurpador-rules.js';
@@ -20,7 +20,7 @@ import { getSpellIndex } from '../core/spell-index.js';
 import { CASTER_CLASSES } from '../core/caster-rules.js';
 import {
   readCreation, raceInfo, creationSkills, creationIssues, ageFor, finalAttributes, originSlots, originSlot, slotPaths,
-  otherAttributes, fxUuids, loadAttrEffects,
+  otherAttributes, fxUuids, loadAttrEffects, creationPrereqContext,
   devotionContext, renderAttributes, renderAge, renderOriginItems, craftChips, pickButton,
   skillLabels, sign
 } from './creation-view.js';
@@ -201,6 +201,15 @@ function stepRaceChoices(app, cr, rules, info) {
   return `<div class="t20tk-wz-page">${pools}${blocks}${info.problems.length ? `<p class="t20tk-bz-warn">Falta: ${info.problems.map(escapeHtml).join('; ')}</p>` : ''}</div>`;
 }
 
+/** Etiqueta de pré-requisitos de um poder na criação: { tag, blocked } (blocked = não cumpre). */
+function prereqTag(p, pctx) {
+  const ev = evaluatePower(p, pctx);
+  if (ev.status === 'missing') return { tag: { text: `✘ Não cumpre: ${ev.parts.filter(x => x.ok === false).map(x => x.text).join(', ')}`, tone: 'warn' }, blocked: true };
+  if (ev.status === 'review') return { tag: { text: '? Conferir pré-requisitos' }, blocked: false };
+  if (ev.status === 'ok') return { tag: { text: '✔ Cumpre', tone: 'ok' }, blocked: false };
+  return { tag: null, blocked: false };
+}
+
 /* ---------- etapa: Origem ---------- */
 
 function stepOrigin(app, cr, rules, info) {
@@ -240,12 +249,16 @@ function stepOrigin(app, cr, rules, info) {
       const need = Math.min(2, age.originBenefits ?? 2);
       const picks = new Set(S.picks);
       const full = picks.size >= need;
-      const tile = (value, label, sub = '') => `<li><button type="button" class="t20tk-wz-tile ${picks.has(value) ? 'is-on' : ''}" data-action="wzOriginPick" data-slot="${k}" data-value="${escapeHtml(value)}" ${full && !picks.has(value) ? 'disabled' : ''}><b>${escapeHtml(label)}</b>${sub ? `<small>${escapeHtml(sub)}</small>` : ''}</button></li>`;
+      const pctx = creationPrereqContext(idx, cr, rules, info);
+      const tile = (value, label, sub = '', blocked = false) => `<li><button type="button" class="t20tk-wz-tile ${picks.has(value) ? 'is-on' : ''}" data-action="wzOriginPick" data-slot="${k}" data-value="${escapeHtml(value)}" ${(full || blocked) && !picks.has(value) ? 'disabled' : ''}><b>${escapeHtml(label)}</b>${sub ? `<small>${escapeHtml(sub)}</small>` : ''}</button></li>`;
       const skillTiles = origin.skills.map(s => tile(`skill:${s}`, s, 'perícia')).join('');
       const powerTiles = origin.powers.map(p => {
         if (/^um poder/i.test(p)) return tile(`generic:${p}`, p, 'poder à escolha');
         const found = findOriginPower(idx.powers, p);
-        return found ? tile(`power:${found.uuid}`, p, 'poder') : `<li><span class="t20tk-wz-tile is-off"><b>${escapeHtml(p)}</b><small>não está no compêndio</small></span></li>`;
+        const ev = found ? evaluatePower(found, pctx) : null;
+        const miss = ev?.parts.filter(x => x.ok === false).map(x => x.text) ?? [];
+        if (found) return tile(`power:${found.uuid}`, p, miss.length ? `poder · não cumpre: ${miss.join(', ')}` : ev.status === 'review' ? `poder · conferir: ${ev.parts.filter(x => x.ok === null).map(x => x.text).join(', ')}` : 'poder', miss.length > 0);
+        return `<li><span class="t20tk-wz-tile is-off"><b>${escapeHtml(p)}</b><small>não está no compêndio</small></span></li>`;
       }).join('');
       const craftNeeded = [...picks].some(x => /^skill:of[íi]cio$/i.test(x.trim()));
       const generic = [...picks].find(x => x.startsWith('generic:'));
@@ -392,9 +405,12 @@ function stepComplication(app, cr) {
   }
   const fp = fstate(app, 'compPower');
   const rows = idx.powers.filter(p => p.tipo === 'geral' && found('compPower', p) && (!fp.cat || catOf(p) === fp.cat));
+  const pctx = creationPrereqContext(idx, cr);
   const list = `<ul class="t20tk-wz-list">${rows.map(p => {
     const pre = prerequisiteText(p.description);
-    return card({ img: p.img, name: p.name, sub: pre ? `Pré-requisitos: ${pre}` : snippet(p), tags: [{ text: GENERAL_CATS.find(([k]) => k === catOf(p))?.[1] ?? '' }, { text: p.packLabel }].filter(t => t.text), selected: p.uuid === cr.complicationPower, value: p.uuid, kind: 'complicationPower' });
+    const pr = prereqTag(p, pctx);
+    const selected = p.uuid === cr.complicationPower;
+    return card({ img: p.img, name: p.name, sub: pre ? `Pré-requisitos: ${pre}` : snippet(p), tags: [pr.tag, { text: GENERAL_CATS.find(([k]) => k === catOf(p))?.[1] ?? '' }, { text: p.packLabel }].filter(t => t?.text), selected, value: p.uuid, kind: 'complicationPower', disabled: pr.blocked && !selected, reason: 'Não cumpre os pré-requisitos (HA p. 282)' });
   }).join('') || '<li class="t20tk-bz-empty">Nenhum poder com esse filtro.</li>'}</ul>`;
   const detail = power ? detailOf(power) : '';
   return split(`${note}${tabs}${bars}${searchBox('compPower')}${oneFilter(app, 'compPower', 'cat', 'Categoria', GENERAL_CATS.map(([value, label]) => ({ value, label })))}${clearBtn(app, 'compPower')}`,
@@ -495,11 +511,15 @@ function renderPicker(app, cr) {
     const clsLabel = k => idx.classes.find(c => c.key === k)?.name ?? (k === 'geral' ? 'Qualquer classe' : k);
     filters = `${kinds.length > 1 ? oneFilter(app, 'pick', 'kind', 'Grupo', kinds.map(k => ({ value: k, label: POWER_KINDS[k] ?? k }))) : ''}${hasGeneral ? oneFilter(app, 'pick', 'cat', 'Categoria', GENERAL_CATS.map(([value, label]) => ({ value, label }))) : ''}${classes.length ? oneFilter(app, 'pick', 'cls', 'Classe', classes.map(k => ({ value: k, label: clsLabel(k) }))) : ''}`;
     count = `${rows.length} poderes`;
+    const pctx = creationPrereqContext(idx, cr);
+    // Poder geral à escolha de uma origem ("um poder de combate", "um poder da Tormenta"): precisa cumprir os pré-requisitos (JdA p. 85).
+    const strict = ['combate', 'tormenta'].includes(pk.pool);
     list = rows.map(p => {
       const pre = prerequisiteText(p.description);
       const t = text(p);
       const tag = p.tipo === 'classe' ? clsLabel(p.subtipo) : p.tipo === 'geral' ? GENERAL_CATS.find(([k]) => k === catOf(p))?.[1] : POWER_KINDS[p.tipo];
-      return card({ img: p.img, name: p.name, sub: pre ? `Pré-requisitos: ${pre}` : (t.length > 140 ? `${t.slice(0, 140)}…` : t), tags: [{ text: tag ?? '' }, { text: p.packLabel }].filter(x => x.text), selected: current === p.uuid, value: p.uuid, kind: 'pick' });
+      const pr = pre || p.tipo === 'geral' ? prereqTag(p, pctx) : { tag: null, blocked: false };
+      return card({ img: p.img, name: p.name, sub: pre ? `Pré-requisitos: ${pre}` : (t.length > 140 ? `${t.slice(0, 140)}…` : t), tags: [pr.tag, { text: tag ?? '' }, { text: p.packLabel }].filter(x => x?.text), selected: current === p.uuid, value: p.uuid, kind: 'pick', disabled: strict && pr.blocked && current !== p.uuid, reason: 'Não cumpre os pré-requisitos' });
     }).join('');
   }
   const search = `<label class="t20tk-wz-field"><span>Buscar</span><input type="search" name="wzq-pick" data-wzq="pick" value="${escapeHtml(w.q.pick ?? '')}" placeholder="Nome ou texto…"></label>`;

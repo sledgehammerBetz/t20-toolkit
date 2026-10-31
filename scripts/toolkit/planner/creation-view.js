@@ -21,6 +21,7 @@ import { ATTRS, ATTR_LABELS, POINT_COST, stepPoint, validatePoints, parseClassSk
 import { ORIGINS, originPowerData } from './origins.js';
 import { ORIGIN_ITEMS, originItemChoices, weaponOptions, findGear } from './origin-items.js';
 import { gainsAt, classSkills, classInfo } from './planner-rules.js';
+import { buildCasterProfiles } from '../core/caster-rules.js';
 import { devotionCheck, mustBeDevout, grantedPowerCount } from '../core/gods.js';
 import { GRANTED_POWERS, POWER_ALIASES } from '../usurpador/usurpador-rules.js';
 import { raceAbilityChoices, racePools, raceSkillSlots, raceAttrBonus, raceChoiceProblems, powerGroupFilter } from './race-choices.js';
@@ -452,6 +453,24 @@ export function creationSkills(idx, cr, rules = getTableRules(), info = raceInfo
   const plan = skillPlan({ labels, classSpec: spec, oneOfPicks: cr.classOneOf ?? {}, classCraft: cr.classCraft, locked, picks: cr.skillPicks ?? {}, counts: { race: info.skillSlots, int: intBonusSkills(finals.int) } });
   const genericCraft = !!spec?.fixed.some(n => keysForName(n, labels).length > 1);
   return { cls, spec, plan, locked, customs, genericCraft, finals };
+}
+
+/**
+ * Contexto de pré-requisitos na criação (1º nível): atributos finais, perícias já garantidas, poderes já escolhidos,
+ * raça e classe. Os poderes escolhidos nas origens ainda precisam cumprir os pré-requisitos (JdA p. 85).
+ */
+export function creationPrereqContext(idx, cr, rules = getTableRules(), info = raceInfo(idx, cr)) {
+  const sk = creationSkills(idx, cr, rules, info);
+  const nm = v => fold(v).replace(/[^a-z0-9º ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const powers = new Set(fxUuids(idx, cr, rules, info).map(u => idx.powerByUuid.get(u)?.key).filter(Boolean));
+  for (const u of info.race?.grants ?? []) { const p = idx.powerByUuid.get(u); if (p) powers.add(p.key); }
+  const classes = sk.cls ? [{ name: sk.cls.name, level: 1 }] : [];
+  return {
+    attributes: sk.finals, classLevels: sk.cls ? { [sk.cls.key]: 1 } : {}, ownClasses: classes.map(c => fold(c.name)), totalLevel: 1,
+    powers, skills: new Set(sk.plan.tiles.filter(t => t.lockedBy || t.pickedBy).map(t => nm(t.label))),
+    knownPowerNames: new Set(idx.powers.map(p => p.key)), race: info.race?.name ?? '',
+    maxCircle: Math.max(0, ...buildCasterProfiles({ classes }).map(p => p.maxCircle))
+  };
 }
 
 /** O que falta, por etapa do assistente: [{step, text}]. */

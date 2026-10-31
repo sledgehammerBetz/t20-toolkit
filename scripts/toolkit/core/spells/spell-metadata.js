@@ -696,6 +696,8 @@ export function resistanceSkillKey(system) {
   if (
     haystack.includes("reflex")
     ||
+    haystack.includes("relfex") // Erupção Glacial no sistema 1.5.015
+    ||
     /(^|\s)ref($|\s)/.test(haystack)
   ) {
     return "ref";
@@ -776,8 +778,8 @@ export function eng4TranslateDurationLiteral(value) {
     inst: "Instantânea", instant: "Instantânea", instantaneous: "Instantânea", instantanea: "Instantânea",
     round: "1 rodada", rodada: "1 rodada",
     scene: "Cena", cena: "Cena",
-    sustained: "Sustentada", sustain: "Sustentada", sustentada: "Sustentada",
-    permanent: "Permanente", permanente: "Permanente",
+    sust: "Sustentada", sustained: "Sustentada", sustain: "Sustentada", sustentada: "Sustentada",
+    perm: "Permanente", permanent: "Permanente", permanente: "Permanente",
     minute: "1 minuto", minuto: "1 minuto",
     hour: "1 hora", hora: "1 hora",
     day: "1 dia", dia: "1 dia"

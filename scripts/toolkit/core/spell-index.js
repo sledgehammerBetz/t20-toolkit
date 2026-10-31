@@ -128,7 +128,12 @@ export async function getPlannerIndex({ refresh = false, gameRef = globalThis.ga
       else if (e.type === 'race') races.push(Object.freeze({ uuid, name: e.name, key: fold(e.name), img: e.img, packLabel: label, atributos: e.system?.atributos ?? {}, dynamic: [...(e.system?.atributosDinamicos?.value ?? [])], dynamicText: e.system?.atributosDinamicos?.description ?? '', core: pack.collection.startsWith('tormenta20.'), grants: (e.system?.grants ?? []).flatMap(g => (g.choices ?? []).map(c => c.uuid)) }));
       else if (['arma', 'equipamento', 'tesouro', 'consumivel'].includes(e.type)) gear.push(Object.freeze({ uuid, name: e.name, key: fold(e.name), img: e.img, packLabel: label, pack: pack.collection, core: pack.collection.startsWith('tormenta20.'), type: e.type, prof: e.system?.proficiencia ?? null, proposito: e.system?.proposito ?? null }));
       else if (e.type === 'poder' && ['classe', 'geral', 'ability', 'origem', 'concedido', 'complicacao', 'distincao', 'racial'].includes(e.system?.tipo)) {
-        powers.push(Object.freeze({ uuid, name: e.name, key: fold(e.name), img: e.img, packLabel: label, tipo: e.system.tipo, subtipo: fold(e.system?.subtipo ?? ''), description: e.system?.description?.value ?? '' }));
+        let tipo = e.system.tipo;
+        let subtipo = fold(e.system?.subtipo ?? '');
+        // Suplementos de Arton grava algumas complicações (Maneta, Falastrão...) como poder geral com subtipo "Complicação [do <classe>]".
+        const comp = tipo === 'geral' && subtipo.match(/^complicacao(?: d[aeo] (.+))?$/);
+        if (comp) { tipo = 'complicacao'; subtipo = comp[1] ?? ''; }
+        powers.push(Object.freeze({ uuid, name: e.name, key: fold(e.name), img: e.img, packLabel: label, tipo, subtipo, description: e.system?.description?.value ?? '' }));
       }
     }
   }

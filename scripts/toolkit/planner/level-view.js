@@ -7,7 +7,7 @@
 import { draftUpdate } from './plan-draft.js';
 import { MODULE_ID } from '../../constants.js';
 import { escapeHtml, fold, actorClasses, plainText } from '../core/t20.js';
-import { BASE_CLASSES, classInfo, gainsAt, prerequisiteText, evaluatePrerequisites } from './planner-rules.js';
+import { BASE_CLASSES, classInfo, gainsAt, evaluatePower, isRepeatable } from './planner-rules.js';
 import { CASTER_CLASSES } from '../core/caster-rules.js';
 import { getTableRules } from '../core/table-rules.js';
 import { skillLabels } from './creation-view.js';
@@ -22,7 +22,7 @@ export const GENERAL_CATS = [['combate', 'Combate'], ['destino', 'Destino'], ['m
 export const catOf = p => {
   const s = fold(p.subtipo);
   if (['combate', 'destino', 'magia', 'tormenta'].includes(s)) return s;
-  if (['grupo', 'geupo', 'parceiro', 'montaria'].includes(s)) return 'grupo';
+  if (['grupo', 'geupo', 'parceiro', 'parceiros', 'montaria'].includes(s)) return 'grupo';
   return 'raca';
 };
 
@@ -180,15 +180,15 @@ export function renderLevelEditor(app) {
 }
 
 export function powerCard(app, p, ctx, { action = '', gain = '', selected = false, taken = false, takenLabel = '' } = {}) {
-  const ev = ctx ? evaluatePrerequisites(prerequisiteText(p.description), ctx) : { status: 'none', parts: [] };
-  const owned = app.ownsPower(p.name) && !aumentoAttr(p.name);
+  const ev = ctx ? evaluatePower(p, ctx) : { status: 'none', parts: [] };
+  const owned = app.ownsPower(p.name) && !aumentoAttr(p.name) && !isRepeatable(p.description);
   const [mark, label] = STATUS[ev.status];
   const prereq = ev.parts.length ? `<span class="t20tk-lv-prereq">${ev.parts.map(x => `<i data-ok="${x.ok}">${x.ok === true ? '✔' : x.ok === false ? '✘' : '?'} ${escapeHtml(x.text)}</i>`).join('')}</span>` : '';
   const sub = strip(p.description).replace(/Pr[ée]-?requisitos?:.*$/i, '').slice(0, 150);
   return `<li class="t20tk-wz-card ${selected ? 'is-selected' : ''} ${owned || taken ? 'is-off' : ''}" data-status="${ev.status}">
     ${p.img ? `<img src="${escapeHtml(p.img)}" alt="" loading="lazy">` : '<span class="t20tk-wz-noimg">✦</span>'}
     <span class="t20tk-wz-copy"><b>${escapeHtml(p.name)}</b><small title="${escapeHtml(strip(p.description))}">${escapeHtml(sub)}${sub.length >= 150 ? '…' : ''}</small>
-      <span class="t20tk-wz-tags"><i data-tone="${ev.status === 'missing' ? 'warn' : ev.status === 'ok' ? 'ok' : ''}">${mark} ${label}</i>${p.subtipo ? `<i>${escapeHtml(p.subtipo)}</i>` : ''}${owned && !aumentoAttr(p.name) ? '<i data-tone="warn">já tem</i>' : ''}${takenLabel ? `<i data-tone="warn">${escapeHtml(takenLabel)}</i>` : ''}${p.tipo === 'distincao' ? '<i data-tone="accent">distinção</i>' : ''}</span>${prereq}</span>
+      <span class="t20tk-wz-tags"><i data-tone="${ev.status === 'missing' ? 'warn' : ev.status === 'ok' ? 'ok' : ''}">${mark} ${label}</i>${p.subtipo ? `<i>${escapeHtml(p.subtipo)}</i>` : ''}${owned ? '<i data-tone="warn">já tem</i>' : ''}${takenLabel ? `<i data-tone="warn">${escapeHtml(takenLabel)}</i>` : ''}${p.tipo === 'distincao' ? '<i data-tone="accent">distinção</i>' : ''}</span>${prereq}</span>
     ${action ? `<button type="button" class="t20tk-ui-button ${selected ? 't20tk-ui-button--primary' : ''}" data-action="${action}" data-gain="${gain}" data-value="${p.uuid}" ${(owned || taken) && !selected ? 'disabled' : ''}>${selected ? 'Selecionado' : 'Selecionar'}</button>` : ''}
   </li>`;
 }
@@ -272,10 +272,10 @@ function renderBrowser(app, row) {
     const gain = via ?? (b.kind !== 'extra' && row?.cls ? gainsAt(row.cls, row.classLevel).gains.find(g => g.id === b.gain) : null) ?? { label: 'Poder extra', powerClass: '' };
     const ctx = app.prereqContext(b.kind === 'extra' ? app.ctxData.current : app.selected);
     const slotClass = gain.powerClass || row?.cls || '';
-    const alma = b.kind === 'extra' || via ? { cls: '', options: [] } : almaLivreOptions(app, ctx, slotClass);
+    const alma = b.kind === 'extra' || via ? { cls: '', options: [], used: '' } : almaLivreOptions(app, ctx, slotClass, { level: app.selected, gain: b.gain });
     const ctxOf = p => (viaDef ? viaCtx(ctx, viaDef, p) : slotCtx(app, ctx, p, { slotClass }));
     const picks = entry.picks ?? {};
-    const taken = new Set(Object.entries(picks).filter(([k]) => k !== b.gain).map(([, v]) => v));
+    const taken = new Set(Object.entries(picks).filter(([k, v]) => k !== b.gain && !isRepeatable(app.index.powerByUuid.get(v)?.description)).map(([, v]) => v));
     const talents = b.kind === 'extra' ? { label: '', options: [] } : raceTalentOptions(app);
     let pool;
     if (viaDef) pool = viaPool(app, viaDef, ctx);
@@ -286,14 +286,15 @@ function renderBrowser(app, row) {
     }
     const rows = pool.filter(p => (!q || p.key.includes(q) || fold(p.description).includes(q))
       && (!f.cat || p.tipo !== 'geral' || catOf(p) === f.cat)
-      && (!f.hideOwned || aumentoAttr(p.name) || !app.ownsPower(p.name))
+      && (!f.hideOwned || aumentoAttr(p.name) || isRepeatable(p.description) || !app.ownsPower(p.name))
       && !(fold(p.name) === 'aumento de atributo' && pool.some(x => aumentoAttr(x.name)))
-      && (!f.eligible || evaluatePrerequisites(prerequisiteText(p.description), ctxOf(p)).status !== 'missing'));
+      && (!f.eligible || evaluatePower(p, ctxOf(p)).status !== 'missing'));
     title = b.kind === 'extra' ? (xvia ? `Poder de outra classe (${xvia.name})` : 'Ganho fora da progressão') : `${gain.label} — ${row.cls} ${row.classLevel}º`;
     const groups = b.kind === 'extra' || via ? '' : chipRow('Grupo', 'group', [['', 'Todos'], ['classe', `De ${gain.powerClass || row.cls}`], ['geral', 'Gerais'], ...(getTableRules().distinctions ? [['distincao', 'Distinções']] : []), ...(talents.options.length ? [['raca', talents.label]] : []), ...(alma.options.length ? [['alma', `Alma Livre (${alma.cls})`]] : [])], f.group);
     const talentNote = talents.options.length && !via ? `<p class="t20tk-bz-note">${escapeHtml(talents.label)}: uma vez por patamar, um deles pode entrar no lugar de um poder de classe.</p>` : '';
+    const almaNote = alma.used ? `<p class="t20tk-bz-note">Alma Livre: o único poder de ${escapeHtml(alma.cls)} já foi escolhido (${escapeHtml(alma.used)}).</p>` : '';
     const viaNote = viaDef ? `<p class="t20tk-bz-note">${escapeHtml(viaDef.name)} (${escapeHtml(viaDef.book)}): os pré-requisitos de nível usam o nível efetivo que o poder dá, só para este poder.</p>` : '';
-    filters = `${groups}${almaLivreField(app, ctx, b, via)}${chipRow('Categoria (poderes gerais)', 'cat', [['', 'Todas'], ...GENERAL_CATS], f.cat)}${toggleRow('Só os que cumpro (pré-requisitos)', 'eligible', f.eligible)}${toggleRow('Ocultar os que já tenho', 'hideOwned', f.hideOwned)}${talentNote}${viaNote}`;
+    filters = `${groups}${almaLivreField(app, ctx, b, via)}${chipRow('Categoria (poderes gerais)', 'cat', [['', 'Todas'], ...GENERAL_CATS], f.cat)}${toggleRow('Só os que cumpro (pré-requisitos)', 'eligible', f.eligible)}${toggleRow('Ocultar os que já tenho', 'hideOwned', f.hideOwned)}${talentNote}${almaNote}${viaNote}`;
     count = rows.length;
     const action = b.kind === 'extra' ? 'lvExtraValue' : 'lvPick';
     const cur = b.kind === 'extra' ? app.extra?.value : picks[b.gain];
