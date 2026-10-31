@@ -23,14 +23,15 @@ function classesLabel(def) {
 
 /**
  * Vagas extras do nível: cada fonte ganha neste nível (habilidade da classe ou poder escolhido aqui) que
- * dá "um poder de outra classe" abre uma vaga `via-<fonte>`.
+ * dá "um poder de outra classe" abre uma vaga `via-<fonte>`. `keyOf` lê o nome normalizado de uma escolha
+ * (uuid do compêndio no plano; id do item da ficha no registro retroativo).
  */
-export function viaSlots(app, level, row, entry) {
+export function viaSlots(app, level, row, entry, keyOf = uuid => app.index.powerByUuid.get(uuid)?.key) {
   if (!row?.cls) return [];
   const keys = [];
   for (const g of gainsAt(row.cls, row.classLevel).gains) {
     if (g.kind === 'ability') keys.push(fold(g.item));
-    if ((g.kind === 'power' || g.kind === 'path') && entry?.picks?.[g.id]) keys.push(app.index.powerByUuid.get(entry.picks[g.id])?.key);
+    if ((g.kind === 'power' || g.kind === 'path') && entry?.picks?.[g.id]) keys.push(keyOf(entry.picks[g.id]));
   }
   return [...new Set(keys.filter(Boolean))].map(k => [k, CROSS_CLASS_SOURCES[k]]).filter(([, def]) => def?.grant)
     .map(([key, def]) => ({ id: viaId(key), kind: 'power', via: key, def, label: `Poder de ${classesLabel(def)} (${def.name})` }));

@@ -1,7 +1,7 @@
 /**
  * Planejador de Personagem (fase 1: subir de nível e planejar níveis futuros).
  * Plano:    flags['t20-toolkit'].plan.levels[N] = { cls, picks: { [gainId]: uuid } }
- * Histórico: flags['t20-toolkit'].history[N] = { classId, classCreated, created: [itemIds], cls }
+ * Histórico: flags['t20-toolkit'].history[N] = { classId, classCreated, created: [itemIds], cls } (retro: true = registro de nível feito fora; ver retro-view.js)
  * Aplicar um nível: sobe system.niveis da classe (ou cria a classe), adiciona as habilidades
  * do nível pela tabela do livro e os poderes escolhidos. PV/PM o próprio sistema recalcula.
  */
@@ -26,6 +26,7 @@ import { applyCreation, rollCreationAttributes, undoCreation, stepCreationAttrib
 import { renderWizard, bindWizard, WIZARD_ACTIONS } from './creation-wizard.js';
 import { renderLevelEditor, bindLevelEditor, LEVEL_ACTIONS, renderExtraPage, aumentoAttr, intSkillGain } from './level-view.js';
 import { renderDoneLevel, RETRAIN_ACTIONS } from './retrain-view.js';
+import { renderRetroLevel, renderRetroPage, bindRetro, looseItems, unrecordedLevels, RETRO_ACTIONS } from './retro-view.js';
 
 /** Ações que gravam várias vezes: a janela redesenha uma vez no fim. */
 const inBatch = fn => function (event, target) { return batch(this, async () => { await flushDraft(this.actor); return fn.call(this, event, target); }); };
@@ -56,7 +57,8 @@ export class PlannerApp extends ApplicationV2 {
       openSheet: PlannerApp.#onOpenSheet,
       ...WIZARD_ACTIONS,
       ...LEVEL_ACTIONS,
-      ...RETRAIN_ACTIONS
+      ...RETRAIN_ACTIONS,
+      ...RETRO_ACTIONS
     }
   };
 
@@ -76,13 +78,15 @@ export class PlannerApp extends ApplicationV2 {
     const actor = this.actor;
     const classes = actorClasses(actor);
     const current = classes.reduce((s, c) => s + c.level, 0);
-    const plan = planFlag(actor).levels ?? {};
+    const pf = planFlag(actor);
+    const plan = pf.levels ?? {};
+    const retro = pf.retro ?? {};
     const history = actor?.getFlag?.(MODULE_ID, 'history') ?? {};
     const timeline = buildTimeline(classes.map(c => ({ name: c.name, level: c.level })), plan);
     // Níveis já aplicados também podem ser abertos (ver o que entrou e retreinar).
     if (this.selected === null || !(this.selected >= 1 && this.selected <= 20)) this.selected = Math.min(current + 1, 20);
     const lastApplied = Math.max(0, ...Object.keys(history).map(Number).filter(n => n <= current));
-    this.ctxData = { classes, current, plan, history, timeline, lastApplied };
+    this.ctxData = { classes, current, plan, retro, history, timeline, lastApplied };
     return this.ctxData;
   }
 
@@ -168,7 +172,7 @@ export class PlannerApp extends ApplicationV2 {
     if (!this.actor) return toolFrame(frame, '');
     if (this.#creating()) return toolFrame({ ...frame, extra: 't20tk-pl t20tk-pl--wz' }, renderWizard(this));
     return toolFrame({ ...frame, extra: 't20tk-pl t20tk-pl--wz' }, `<div class="t20tk-wz">
-      <nav class="t20tk-wz-nav" aria-label="Níveis"><p class="t20tk-wz-navtitle">Níveis</p><ol class="t20tk-lv-nav">${this.#renderLevelNav()}</ol>${this.#renderExtraNav()}</nav>
+      <nav class="t20tk-wz-nav" aria-label="Níveis"><p class="t20tk-wz-navtitle">Níveis</p><ol class="t20tk-lv-nav">${this.#renderLevelNav()}</ol>${this.#renderRetroNav()}${this.#renderExtraNav()}</nav>
       <section class="t20tk-wz-main"><div class="t20tk-wz-body t20tk-pl-editor">${this.#renderEditor()}</div></section>
     </div>`);
   }
@@ -180,11 +184,12 @@ export class PlannerApp extends ApplicationV2 {
     const c = this.ctxData;
     const KIND = { power: 'Poder', path: 'Caminho', ability: 'Habilidade', spells: 'Magias', note: 'Nota' };
     return c.timeline.map(r => {
-      const sel = r.level === this.selected && this.page !== 'extra';
+      const sel = r.level === this.selected && !this.page;
       const hist = c.history[r.level];
       const creation = r.level === 1 && c.current === 0;
       let title, sub = '', status = '';
-      if (r.done) { title = hist?.creation ? 'Criação' : hist?.cls ? `${hist.cls}${hist.classLevel ? ` ${hist.classLevel}` : ''}` : 'Na ficha'; sub = hist?.creation && hist?.cls ? `${hist.cls} · na ficha` : 'na ficha'; status = 'done'; }
+      if (r.done && !hist) { const d = c.retro[r.level]; title = d?.cls ? `${d.cls} ?` : 'Na ficha'; sub = 'sem registro · dizer de onde veio'; status = 'missing'; }
+      else if (r.done) { title = hist?.creation ? 'Criação' : hist?.cls ? `${hist.cls}${hist.classLevel ? ` ${hist.classLevel}` : ''}` : 'Na ficha'; sub = hist?.creation && hist?.cls ? `${hist.cls} · na ficha` : hist?.retro ? 'na ficha · registrado' : 'na ficha'; status = 'done'; }
       else if (creation) { title = 'Criação'; sub = 'raça, origem, classe…'; status = 'next'; }
       else if (r.cls) {
         const g = gainsAt(r.cls, r.classLevel);
@@ -201,6 +206,14 @@ export class PlannerApp extends ApplicationV2 {
     }).join('');
   }
 
+  /** Registro retroativo: aparece enquanto houver nível sem registro ou poder da ficha sem origem. */
+  #renderRetroNav() {
+    const c = this.ctxData;
+    const n = looseItems(this).length;
+    if (!n && !unrecordedLevels(c).length) return '';
+    return `<button type="button" class="t20tk-wz-navlink t20tk-xg-nav ${this.page === 'retro' ? 'is-on' : ''}" data-action="rtrPage">⟲ De onde veio${n ? ` <span class="t20tk-count">${n}</span>` : ''}</button>`;
+  }
+
   #renderExtraNav() {
     if (getTableRules().extraGains === 'off') return '';
     const n = (this.actor.getFlag(MODULE_ID, 'extraGains') ?? []).length;
@@ -209,11 +222,13 @@ export class PlannerApp extends ApplicationV2 {
 
   #renderEditor() {
     if (this.page === 'extra') return renderExtraPage(this);
+    if (this.page === 'retro') return renderRetroPage(this);
     const c = this.ctxData;
     const level = this.selected;
     const row = c.timeline.find(r => r.level === level);
     if (!row) return '';
     if (level === 1 && c.current === 0) return '';
+    if (row.done && !c.history[level]) return renderRetroLevel(this);
     if (row.done) return renderDoneLevel(this);
     return renderLevelEditor(this);
   }
@@ -255,6 +270,7 @@ export class PlannerApp extends ApplicationV2 {
     const root = this.element;
     if (this.#creating()) { bindWizard(this, root); return; }
     bindLevelEditor(this, root);
+    bindRetro(this, root);
     root.querySelector('[aria-pressed="true"][data-action="pickLevel"]')?.scrollIntoView?.({ block: 'nearest' });
   }
 
@@ -319,6 +335,12 @@ export class PlannerApp extends ApplicationV2 {
     const [g] = list.splice(Number(target.dataset.index), 1);
     if (!g) return;
     const update = { [`flags.${MODULE_ID}.extraGains`]: list };
+    // Registrado retroativamente: o item já estava na ficha antes; só perde a marca de ganho extra.
+    if (g.retro) {
+      const item = g.itemId ? actor.items.get(g.itemId) : null;
+      await Promise.all([item?.update({ [`flags.${MODULE_ID}.-=source`]: null, [`flags.${MODULE_ID}.-=extraGain`]: null }), actor.update(update)]);
+      return this.render();
+    }
     if (g.type === 'pericia') update[`system.pericias.${g.key}.treinado`] = false;
     if (g.type === 'atributo') update[`system.atributos.${g.key}.base`] = (Number(actor.system?.atributos?.[g.key]?.base) || 0) - 1;
     await Promise.all([g.itemId ? actor.items.get(g.itemId)?.delete() : null, actor.update(update)]);
