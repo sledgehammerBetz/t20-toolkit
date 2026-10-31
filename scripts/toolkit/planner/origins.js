@@ -1,3 +1,5 @@
+import { fold } from '../core/t20.js';
+
 /** Origens: 35 do Tormenta20 JdA (escolha 2 benefícios) e 30 de Heróis de Arton (cap. 1, "Novas origens":
  * benefício fixo = o poder de origem com o mesmo nome + as perícias em `fixed.skills`). */
 const BASE_ORIGINS = [
@@ -957,8 +959,9 @@ const BASE_ORIGINS = [
  }
 ];
 
-/** Origens regionais do Atlas de Arton (p. 472): benefício único = o poder de origem com o mesmo nome
- * (as perícias treinadas citadas no poder ficam em `fixed.skills`). Região no `region`. */
+/** Origens regionais do Atlas de Arton (p. 470-479, 66 origens): benefício único = o poder de origem com o mesmo nome
+ * (as perícias treinadas citadas no poder ficam em `fixed.skills`). Região no `region`.
+ * `text`: texto do livro para origens cujo poder não está no Suplementos de Arton (vira o poder na ficha). */
 const ATLAS_ORIGINS = [
  {
   "name": "Agricultor Sambur",
@@ -1095,6 +1098,15 @@ const ATLAS_ORIGINS = [
   "name": "Descendente colleniano",
   "region": "Ahlen",
   "skills": []
+ },
+ {
+  "name": "Desertor da Supremacia",
+  "region": "Supremacia Purista",
+  "skills": [
+   "Guerra"
+  ],
+  "page": 473,
+  "text": "Você passou pelo treinamento padrão dos batalhões puristas e talvez tenha visto de perto as atrocidades desses vilões. Seja como for, decidiu que não podia ficar neutro frente à Supremacia. Benefício. Você é treinado em Guerra e recebe proficiência com espadas bastardas e escudos. Se estiver empunhando uma espada bastarda e um escudo pesado, recebe +2 em testes de ataque."
  },
  {
   "name": "Duplo Feérico",
@@ -1375,5 +1387,27 @@ const ATLAS_ORIGINS = [
 
 export const ORIGINS = Object.freeze([
   ...BASE_ORIGINS,
-  ...ATLAS_ORIGINS.map(o => ({ name: o.name, skills: [], powers: [o.name], items: '', source: 'Atlas de Arton', region: o.region, note: o.note, fixed: { power: o.name, skills: o.skills } }))
+  ...ATLAS_ORIGINS.map(o => ({ name: o.name, skills: [], powers: [o.name], items: '', source: 'Atlas de Arton', region: o.region, note: o.note, text: o.text, page: o.page, fixed: { power: o.name, skills: o.skills } }))
 ]);
+
+/** Poder citado na lista de uma origem: prefere o de origem ou geral (há homônimos em Habilidades de Criaturas e no Guia de NPCs). */
+export function findOriginPower(powers, name) {
+  const key = fold(name);
+  return powers.find(p => p.key === key && (p.tipo === 'origem' || p.tipo === 'geral')) ?? powers.find(p => p.key === key) ?? null;
+}
+
+/** Poder de origem montado com o texto do livro, para a origem cujo poder não está em nenhum compêndio (ou null). */
+export function originPowerData(origin) {
+  if (!origin?.text) return null;
+  const [intro, benefit] = origin.text.split(/\s*Benefício\.\s*/);
+  return {
+    name: origin.fixed?.power ?? origin.name,
+    type: 'poder',
+    system: {
+      tipo: 'origem',
+      subtipo: '',
+      description: { value: `<p>${intro}</p>${benefit ? `<p><strong>Benefício.</strong> ${benefit}</p>` : ''}` },
+      source: `T20 - ${origin.source}${origin.page ? ` (pág. ${origin.page})` : ''}`
+    }
+  };
+}
