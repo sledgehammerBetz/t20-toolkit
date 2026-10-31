@@ -1,6 +1,6 @@
 /**
  * Usurpador — Usurpar (lançar magia divina com Enganação) e Poder Capturado.
- * Estado: flags['t20-toolkit'].usurpador = { capture: { god, power, itemId, day, uses } };
+ * Estado: flags['t20-toolkit'].usurpador = { capture: { god, power, itemId, day, uses }, repertoire: [{ god, uuid, name }] };
  * preferências do teste em flags['t20-toolkit'].usurpadorTeste = { skill, extra, fx, text }.
  * Magias usurpadas ficam na ficha com flags['t20-toolkit'].learnedBy = 'usurpar' para poder
  * usar a rolagem do próprio sistema (aprimoramentos, dano, PM); não contam como aprendidas.
@@ -20,7 +20,7 @@ import { filterSpells, filterOptions, EMPTY_FILTERS } from '../core/spells/spell
 import { spellFilterPanel, bindSpellFilterPanel, viaTags } from '../ui/spell-filter-panel.js';
 import { getSpellIndex, getGrantedPowerIndex } from '../core/spell-index.js';
 import {
-  GRANTED_POWERS, POWER_ALIASES, usurpDC, captureDC, CAPTURE_FAIL_PM, divineTheft, divineTheftEffect,
+  GRANTED_POWERS, POWER_ALIASES, usurpDC, captureDC, CAPTURE_FAIL_PM, divineTheft, divineTheftEffect, repertoireSlots,
   TEST_SKILL, castCost, effectCost, skillSubstitutes, textBonuses, testParts, fixedBonus, testFormula, chanceOf
 } from './usurpador-rules.js';
 import { today } from '../grimorio/grimorio-app.js';
@@ -49,6 +49,8 @@ export class UsurpadorApp extends ApplicationV2 {
       switchView: UsurpadorApp.#onSwitch,
       usurp: UsurpadorApp.#onUsurp,
       capture: UsurpadorApp.#onCapture,
+      learnPower: UsurpadorApp.#onLearnPower,
+      forgetPower: UsurpadorApp.#onForgetPower,
       castBack: UsurpadorApp.#onCastBack,
       castRoll: UsurpadorApp.#onCastRoll,
       enhToggle: UsurpadorApp.#onEnhToggle,
@@ -95,6 +97,7 @@ export class UsurpadorApp extends ApplicationV2 {
     const day = today();
     this.ctxData = {
       profile, day, capture,
+      repertoire: Array.isArray(state.repertoire) ? state.repertoire : [],
       captureActive: !!capture && capture.day === day,
       usesToday: capture?.day === day ? (capture.uses ?? 0) : 0,
       armorPenalty: Number(actor?.pda) || Number(actor?.system?.attributes?.defesa?.pda) || 0,
@@ -355,24 +358,32 @@ export class UsurpadorApp extends ApplicationV2 {
     else if (q) list = Object.keys(GRANTED_POWERS).flatMap(g => this.powersOf(g)).filter(p => fold(p.found?.name ?? p.name).includes(q) || fold(p.god).includes(q));
     const setup = this.#testSetup();
     const dc = captureDC(c.usesToday);
+    const slots = repertoireSlots(lvl);
+    const known = c.repertoire;
+    const inRep = p => known.some(r => r.god === p.god && r.uuid === p.found?.uuid);
+    const free = slots - known.length;
     const rows = list.map(p => {
-      const ok = p.found && !p.owned;
+      const learned = inRep(p);
+      const ok = p.found && !p.owned && learned;
+      const addBtn = p.found && !learned && free > 0 && this.actor.isOwner ? `<button type="button" class="t20tk-ui-button" data-action="learnPower" data-uuid="${p.found.uuid}" data-god="${escapeHtml(p.god)}">Pôr no repertório</button>` : '';
       const key = `${p.god}::${p.found?.uuid ?? p.name}`;
       const open = this.view.openPower === key;
       const card = cardHTML({
-        img: p.found?.img, name: p.found?.name ?? p.name, status: ok ? 'allowed' : 'blocked',
-        meta: p.found ? `${this.view.god ? '' : `${p.god} · `}${p.found.packLabel}` : 'Não está nos compêndios instalados',
+        img: p.found?.img, name: p.found?.name ?? p.name, status: ok ? 'allowed' : (learned || addBtn ? 'review' : 'blocked'),
+        meta: p.found ? `${this.view.god ? '' : `${p.god} · `}${p.found.packLabel}${learned ? ' · no repertório' : ''}` : 'Não está nos compêndios instalados',
         sub: p.owned ? 'Já está na ficha' : (p.found ? (open ? 'Clique para fechar a descrição' : 'Clique para ver o que o poder faz') : ''),
         action: p.found ? 'togglePower' : '', uuid: key, selected: open,
-        side: `<span class="t20tk-bz-status" title="Chance no d20 com ${escapeHtml(setup.skill.label)} ${sign(setup.bonus)}">${ok ? `${chanceOf(dc, setup.bonus)}%` : '—'}</span>${ok && this.actor.isOwner ? `<button type="button" class="t20tk-ui-button t20tk-ui-button--primary" data-action="capture" data-uuid="${p.found.uuid}" data-god="${escapeHtml(p.god)}">Capturar…</button>` : ''}`
+        side: `<span class="t20tk-bz-status" title="Chance no d20 com ${escapeHtml(setup.skill.label)} ${sign(setup.bonus)}">${ok ? `${chanceOf(dc, setup.bonus)}%` : '—'}</span>${ok && this.actor.isOwner ? `<button type="button" class="t20tk-ui-button t20tk-ui-button--primary" data-action="capture" data-uuid="${p.found.uuid}" data-god="${escapeHtml(p.god)}">Capturar…</button>` : addBtn}`
       });
       const desc = open ? `<li class="t20tk-us-desc t20tk-bz-description">${this.descCache.get(p.found.uuid) ?? `<p>${escapeHtml(plainText(p.found.description))}</p>`}</li>` : '';
       return card + desc;
     }).join('');
     const empty = !this.view.god && !q ? '<p class="t20tk-bz-note">Escolha um deus ou busque um poder pelo nome.</p>' : (!rows ? '<p class="t20tk-bz-empty">Nenhum poder encontrado.</p>' : '');
+    const repList = known.map(r => `<li><b>${escapeHtml(r.name)}</b> <small>${escapeHtml(r.god)}</small>${this.actor.isOwner ? ` <button type="button" class="t20tk-bz-link" data-action="forgetPower" data-uuid="${escapeHtml(r.uuid)}" data-god="${escapeHtml(r.god)}">tirar</button>` : ''}</li>`).join('');
+    const repertoire = `<div class="t20tk-wz-field"><span>Repertório (${known.length}/${slots})</span>${repList ? `<ul class="t20tk-us-repertoire">${repList}</ul>` : '<small class="t20tk-bz-meta">Vazio: escolha os pares deus + poder abaixo.</small>'}</div>`;
     return `<section class="t20tk-us-capture">
-      <p class="t20tk-bz-note">Escolha um deus, gaste 1 hora e faça ${escapeHtml(setup.skill.label)} <b>CD ${dc}</b> (+5 a cada uso no mesmo dia). Passou: você conta como devoto desse deus e recebe um poder concedido dele até o fim do dia ou até usar de novo (confira os pré-requisitos; poderes exclusivos de classe não valem). Não precisa seguir as Obrigações & Restrições. Falhou: perde 3 PM.</p>
-      ${status}
+      <p class="t20tk-bz-note">A cada nível de Usurpador a partir do 4º, escolha um deus maior e um poder concedido dele para o repertório (confira os pré-requisitos; poderes exclusivos de classe, inclusive de clérigo, não valem). Para usar um poder do repertório, gaste 1 hora e faça ${escapeHtml(setup.skill.label)} <b>CD ${dc}</b> (+5 a cada uso no mesmo dia). Passou: você conta como devoto desse deus e usa o poder até o fim do dia ou até usar de novo, sem seguir as Obrigações & Restrições. Falhou: perde 3 PM.</p>
+      ${status}${repertoire}
       <label class="t20tk-wz-field"><span>Buscar deus ou poder</span><input type="search" name="godq" value="${escapeHtml(this.view.godQuery)}" placeholder="Ex.: Khalmyr, Coragem Total…"></label>
       <div class="t20tk-wz-field"><span>Deus</span>${chips}</div>
       ${empty}<ol class="t20tk-bz-list t20tk-es-list">${rows}</ol>
@@ -412,14 +423,19 @@ export class UsurpadorApp extends ApplicationV2 {
 
   /** Substitui (não mescla) o registro do poder capturado. */
   async #saveCapture(capture) {
-    if (!capture) return this.actor.unsetFlag(MODULE_ID, 'usurpador');
-    // Uma gravação só: os campos novos e a remoção dos que saíram (em vez de apagar tudo e gravar de novo).
+    // Uma gravação só: os campos novos e a remoção dos que saíram (em vez de apagar tudo e gravar de novo). O repertório fica.
     const base = `flags.${MODULE_ID}.usurpador`;
     const old = this.actor.getFlag(MODULE_ID, 'usurpador') ?? {};
+    if (!capture) return old.capture ? this.actor.update({ [`${base}.-=capture`]: null }) : undefined;
     const update = { [`${base}.capture`]: capture };
-    for (const key of Object.keys(old)) if (key !== 'capture') update[`${base}.-=${key}`] = null;
+    for (const key of Object.keys(old)) if (!['capture', 'repertoire'].includes(key)) update[`${base}.-=${key}`] = null;
     for (const key of Object.keys(old.capture ?? {})) if (!(key in capture)) update[`${base}.capture.-=${key}`] = null;
     return this.actor.update(update);
+  }
+
+  /** Repertório do Poder Capturado (substitui a lista inteira). */
+  #saveRepertoire(list) {
+    return this.actor.update({ [`flags.${MODULE_ID}.usurpador.repertoire`]: list });
   }
 
   /** Aprimoramentos da magia (os da própria magia e os da ficha que valem para ela), como o sistema os lista. */
@@ -461,9 +477,22 @@ export class UsurpadorApp extends ApplicationV2 {
     this.render();
   }
 
+  static async #onLearnPower(event, target) {
+    const power = this.powers.find(p => p.uuid === target.dataset.uuid);
+    const c = this.ctxData;
+    if (!power || !this.actor?.isOwner || c.repertoire.length >= repertoireSlots(c.profile?.level ?? 0)) return;
+    await this.#saveRepertoire([...c.repertoire, { god: target.dataset.god, uuid: power.uuid, name: power.name }]);
+  }
+
+  static async #onForgetPower(event, target) {
+    const { uuid, god } = target.dataset;
+    await this.#saveRepertoire(this.ctxData.repertoire.filter(r => !(r.uuid === uuid && r.god === god)));
+  }
+
   static async #onCapture(event, target) {
     const power = this.powers.find(p => p.uuid === target.dataset.uuid);
     if (!power || !this.actor?.isOwner) return;
+    if (!this.ctxData.repertoire.some(r => r.uuid === power.uuid && r.god === target.dataset.god)) return;
     const html = await this.#description(power.uuid, power.description, null);
     this.cast = { kind: 'capture', uuid: power.uuid, name: power.name, img: power.img, god: target.dataset.god, html };
     this.render();

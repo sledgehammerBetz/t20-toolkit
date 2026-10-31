@@ -226,7 +226,7 @@ const BASE_ORIGINS = [
   "skills": [
    "Adestramento",
    "Cavalgar",
-   "Ofício (fazendeiro)",
+   "Ofício",
    "Sobrevivência"
   ],
   "powers": [
