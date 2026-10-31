@@ -12,9 +12,10 @@ import { toolFrame, onNavigate, switchTheme, reopen } from '../ui/frame.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { TOOLKIT_FEATURES } from '../features.js';
 import { buildCasterProfiles, learningCapacity } from '../core/caster-rules.js';
+import { crossClassExtra } from '../core/caster-context.js';
 import { buildTimeline, gainsAt } from '../planner/planner-rules.js';
 import { getTableRules, retrainStatus } from '../core/table-rules.js';
-import { engenhocaState, isEngenhoca } from '../engenhocas/engenhocas-rules.js';
+import { engenhocaState, isEngenhoca, isInventorClass } from '../engenhocas/engenhocas-rules.js';
 import { dayKey } from '../grimorio/grimorio-rules.js';
 
 const ApplicationV2 = globalThis.foundry?.applications?.api?.ApplicationV2 ?? class {};
@@ -53,7 +54,7 @@ export function homeSummary(actor, { rules = getTableRules(), isGM = false, day 
   if (extras.length) info.push({ tool: 'leveler', text: `${extras.length} ganho(s) fora da progressão registrado(s).` });
 
   // Magias
-  const profiles = buildCasterProfiles({ classes, arcanistPaths: arcanistPaths(actor) });
+  const profiles = buildCasterProfiles({ classes, arcanistPaths: arcanistPaths(actor), extra: crossClassExtra(actor, classes) });
   const known = actorSpells(actor);
   const casters = profiles.filter(p => p.maxCircle > 0 && p.id !== 'usurpador');
   if (casters.length) {
@@ -85,7 +86,10 @@ export function homeSummary(actor, { rules = getTableRules(), isGM = false, day 
 
   // Engenhocas
   const engs = items.filter(i => { try { return isEngenhoca(i); } catch { return false; } });
-  const inventor = classes.some(c => c.key === 'inventor');
+  // Alquimista (variante) só entra com o poder Engenhoqueiro: a variante não se dedica a engenhocas.
+  // Engenhoqueiro pego por poder de outra classe (Alma Livre, Diferentão...) também conta.
+  const engenhoqueiro = items.find(i => i.type === 'poder' && fold(i.name) === 'engenhoqueiro');
+  const inventor = classes.some(c => c.key === 'inventor') || (!!engenhoqueiro && (classes.some(c => isInventorClass(c.name)) || !!engenhoqueiro.flags?.[MODULE_ID]?.via));
   if (engs.length || inventor) {
     relevant.add('engenhocas');
     const jammed = engs.filter(i => { try { return engenhocaState(i).jammed; } catch { return false; } });

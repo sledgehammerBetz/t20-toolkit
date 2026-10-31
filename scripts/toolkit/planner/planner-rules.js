@@ -93,7 +93,7 @@ export function evaluatePrerequisites(text, ctx) {
   const norm = v => fold(v).replace(/[^a-z0-9º ]+/g, ' ').replace(/\s+/g, ' ').trim();
   const one = piece => {
     const f = fold(piece);
-    let m = f.match(/^(\d+)[ºo]? nivel de ([a-z\s]+)$/);
+    let m = f.match(/^(\d+)[ºo°]? nivel de ([a-z\s]+)$/); // alguns poderes trazem "6° nível"
     if (m) {
       const cls = fold(m[2]).trim();
       const have = cls === 'personagem' ? ctx.totalLevel : (ctx.classLevels[cls] ?? 0);

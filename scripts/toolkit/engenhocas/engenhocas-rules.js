@@ -5,6 +5,9 @@
  *   Preço T$ 100 × PM da magia. Teste de Ofício (engenhoqueiro) CD 20 + PM.
  * Limite: Inteligência (+3 com Manutenção Eficiente, que também reduz o espaço para 0,5).
  * Item: Minúsculo, 1 espaço, Defesa 15, PV = metade dos PV do fabricante, RD 5; empunhada ou vestida.
+ * Nível de inventor: soma o Inventor e a variante Alquimista (Heróis de Arton p. 21: variante e classe básica são a mesma
+ *   classe, com a mesma lista de poderes e os mesmos pré-requisitos). Engenhoqueiro pego por poder de outra classe usa o
+ *   nível efetivo da fonte (core/class-levels.js).
  * Ativação: só o fabricante; ação padrão (ou a execução da magia, o que for maior), Ofício (engenhoqueiro) CD 15 + PM, +5 por ativação no mesmo dia,
  *   +1 por PM de aprimoramento (limite de aprimoramentos = Int). Falha: enguiça (1 hora para consertar).
  * Aparatos: até 2 por engenhoca; 1 aparato +2 na CD, 2 aparatos +5 (Aparato Personalizado ignora o primeiro).
@@ -21,6 +24,7 @@
  * para que as engenhocas já fabricadas continuem funcionando.
  */
 import { fold } from '../core/t20.js';
+import { baseClassKey, classLevelMap } from '../core/class-levels.js';
 
 export const FLAG_SCOPE = 'tormenta20';
 export const FLAG_KEY = 'engenhoca';
@@ -346,11 +350,16 @@ export const NEW_DAY_PATCH = Object.freeze({ usesToday: 0, refrigerationUsedToda
 
 const has = (names, wanted) => names.has(fold(wanted));
 
-/** Contexto do inventor a partir da ficha (nomes de poderes e classes). */
-export function inventorContext({ classes = [], powerNames = [], int = 0, maxPV = 0, pda = 0, skillTrained = false }) {
+/** Inventor e suas variantes (Heróis de Arton, Tabela 1-2). */
+export const isInventorClass = name => baseClassKey(name) === 'inventor';
+
+/**
+ * Contexto do inventor a partir da ficha (nomes de poderes e classes).
+ * `viaLevel`: nível de inventor do Engenhoqueiro pego por um poder de outra classe (Alma Livre, Diferentão...).
+ */
+export function inventorContext({ classes = [], powerNames = [], int = 0, maxPV = 0, pda = 0, skillTrained = false, viaLevel = 0 }) {
   const names = new Set(powerNames.map(fold));
-  const inv = classes.find(c => fold(c.name) === 'inventor');
-  const level = inv?.level ?? 0;
+  const level = Math.max(classLevelMap(classes).inventor ?? 0, Number(viaLevel) || 0);
   const manutencao = has(names, 'Manutenção Eficiente');
   return {
     level,

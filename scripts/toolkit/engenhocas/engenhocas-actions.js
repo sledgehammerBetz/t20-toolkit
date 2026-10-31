@@ -8,7 +8,8 @@
  * Preferências do teste em flags['t20-toolkit'].engenhocasTeste = { skill, fx, text }.
  */
 import { MODULE_ID } from '../../constants.js';
-import { escapeHtml, actorClasses, plainText } from '../core/t20.js';
+import { escapeHtml, actorClasses, plainText, fold } from '../core/t20.js';
+import { powerClassLevel } from '../core/class-levels.js';
 import { chatCard, chatFlavor, postCard } from '../ui/chat.js';
 import { skillSubstitutes, textBonuses, testParts, fixedBonus, allFixed, testFormula, chanceOf, canChooseZero } from '../core/skill-test.js';
 import {
@@ -25,8 +26,13 @@ const TEST_FLAG = 'engenhocasTeste';
 
 export function actorInventor(actor) {
   const skill = actor?.system?.pericias?.[SKILL_KEY];
+  const classes = actorClasses(actor);
+  // Engenhoqueiro pego por poder de outra classe (Alma Livre, Diferentão...): nível efetivo da fonte.
+  const eng = [...(actor?.items ?? [])].find(i => i.type === 'poder' && fold(i.name) === 'engenhoqueiro');
+  const via = eng?.flags?.[MODULE_ID]?.via ?? null;
   return inventorContext({
-    classes: actorClasses(actor),
+    classes,
+    viaLevel: via ? powerClassLevel({ classes, via, cls: 'inventor' }) : 0,
     powerNames: [...(actor?.items ?? [])].filter(i => i.type === 'poder').map(i => i.name),
     int: Number(actor?.system?.atributos?.int?.value) || 0,
     maxPV: Number(actor?.system?.attributes?.pv?.max) || 0,
