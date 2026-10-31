@@ -55,14 +55,14 @@ export function wizardState(app) {
 
 const card = ({ img, name, sub = '', tags = [], selected = false, value, kind, disabled = false, reason = '' }) => `
   <li class="t20tk-wz-card ${selected ? 'is-selected' : ''} ${disabled ? 'is-off' : ''}">
-    ${img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy">` : '<span class="t20tk-wz-noimg" aria-hidden="true">✦</span>'}
+    ${img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy">` : '<span class="t20tk-wz-noimg" aria-hidden="true"><i class="fa-solid fa-star" inert></i></span>'}
     <span class="t20tk-wz-copy"><b>${escapeHtml(name)}</b>${sub ? `<small>${escapeHtml(sub)}</small>` : ''}
       ${tags.length ? `<span class="t20tk-wz-tags">${tags.map(t => `<i data-tone="${t.tone ?? ''}">${escapeHtml(t.text)}</i>`).join('')}</span>` : ''}</span>
     <button type="button" class="t20tk-ui-button ${selected ? 't20tk-ui-button--primary' : ''}" data-action="wzSelect" data-kind="${kind}" data-value="${escapeHtml(value)}" ${disabled ? `disabled title="${escapeHtml(reason)}"` : ''}>${selected ? 'Selecionado' : 'Selecionar'}</button>
   </li>`;
 
 const selectedBar = (kind, item, extra = '', label = 'Selecionado') => item
-  ? `<div class="t20tk-wz-selected">${item.img ? `<img src="${escapeHtml(item.img)}" alt="">` : '<span class="t20tk-wz-noimg">✦</span>'}<span><small>${escapeHtml(label)}</small><b>${escapeHtml(item.name)}</b>${extra}</span><button type="button" class="t20tk-wz-x" data-action="wzClear" data-kind="${kind}" aria-label="Limpar">✕</button></div>`
+  ? `<div class="t20tk-wz-selected">${item.img ? `<img src="${escapeHtml(item.img)}" alt="">` : '<span class="t20tk-wz-noimg"><i class="fa-solid fa-star" inert></i></span>'}<span><small>${escapeHtml(label)}</small><b>${escapeHtml(item.name)}</b>${extra}</span><button type="button" class="t20tk-wz-x" data-action="wzClear" data-kind="${kind}" aria-label="Limpar">✕</button></div>`
   : `<div class="t20tk-wz-selected is-empty"><span><small>${escapeHtml(label)}</small><b>Nada ainda</b></span></div>`;
 
 function filterBox(app, kind, sources) {

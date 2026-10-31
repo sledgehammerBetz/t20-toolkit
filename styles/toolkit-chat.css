@@ -1,19 +1,23 @@
-/* T20 Toolkit — cartões de chat (ui/chat.js). Sempre em "pergaminho", legível no chat claro e escuro. */
+/* T20 Toolkit — cartões de chat (ui/chat.js). As mensagens do Foundry V13 são sempre em pergaminho com texto escuro,
+ * nos dois temas; o cartão fica transparente sobre ele e herda a cor do texto, com o vermelho T20 de destaque. */
 .t20tk-chat {
-  --c-bg: #FFF9F1; --c-alt: #EEE3D6; --c-line: #D1BEB2; --c-text: #291F1E; --c-soft: #665453; --c-accent: #A41D2C;
+  color-scheme: light;
+  --c-bg: transparent; --c-alt: light-dark(rgb(0 0 0 / .06), rgb(255 255 255 / .06));
+  --c-line: light-dark(rgb(0 0 0 / .18), rgb(255 255 255 / .14));
+  --c-text: currentColor; --c-soft: var(--color-dark-4, #444); --c-accent: light-dark(#A41D2C, #EA7480);
   --c-tone: var(--c-accent);
   margin: 2px 0; border: 1px solid var(--c-line); border-radius: 8px; overflow: hidden;
   background: var(--c-bg); color: var(--c-text);
-  font-family: 'Inter', 'T20TK Inter', system-ui, sans-serif; font-size: 12px; line-height: 1.45;
+  font-family: var(--t20-font-ui); font-size: 12px; line-height: 1.45;
 }
-.t20tk-chat[data-tone="success"] { --c-tone: #256344; }
-.t20tk-chat[data-tone="warning"] { --c-tone: #805311; }
-.t20tk-chat[data-tone="error"] { --c-tone: #AA2B38; }
+.t20tk-chat[data-tone="success"] { --c-tone: light-dark(#256344, #93D2B1); }
+.t20tk-chat[data-tone="warning"] { --c-tone: light-dark(#805311, #EAC177); }
+.t20tk-chat[data-tone="error"] { --c-tone: light-dark(#AA2B38, #FFA1A8); }
 .t20tk-chat header { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--c-alt); border-bottom: 1px solid var(--c-line); box-shadow: inset 4px 0 0 var(--c-tone); }
-.t20tk-chat-icon { display: grid; place-items: center; flex: 0 0 30px; width: 30px; height: 30px; border-radius: 7px; background: var(--c-bg); color: var(--c-accent); font-size: 16px; font-weight: 700; }
+.t20tk-chat-icon { display: grid; place-items: center; flex: 0 0 30px; width: 30px; height: 30px; border-radius: 7px; background: var(--c-alt); color: var(--c-accent); font-size: 14px; }
 .t20tk-chat header > span:last-child { display: flex; flex-direction: column; min-width: 0; }
 .t20tk-chat header small { font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--c-accent); }
-.t20tk-chat header strong { font-family: 'Merriweather', 'T20TK Serif', Georgia, serif; font-size: 14px; font-weight: 700; color: var(--c-text); }
+.t20tk-chat header strong { font-family: var(--t20-font-head); font-size: 14px; font-weight: 700; color: var(--c-text); }
 .t20tk-chat header em { font-style: normal; font-size: 11px; color: var(--c-soft); }
 .t20tk-chat-rows { display: grid; gap: 4px; margin: 0; padding: 8px 10px; }
 .t20tk-chat-rows > div { display: flex; justify-content: space-between; gap: 10px; }

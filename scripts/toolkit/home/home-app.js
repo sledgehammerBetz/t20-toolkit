@@ -8,7 +8,7 @@ import { watchActor } from '../ui/live-refresh.js';
 import { MODULE_ID, MODULE_VERSION } from '../../constants.js';
 import { openReport } from '../beta.js';
 import { escapeHtml, fold, actorClasses, actorSpells, arcanistPaths } from '../core/t20.js';
-import { toolFrame, onNavigate, switchTheme, reopen } from '../ui/frame.js';
+import { toolFrame, onNavigate, onTheme, reopen } from '../ui/frame.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { TOOLKIT_FEATURES } from '../features.js';
 import { buildCasterProfiles, learningCapacity } from '../core/caster-rules.js';
@@ -19,7 +19,8 @@ import { engenhocaState, isEngenhoca, isInventorClass } from '../engenhocas/enge
 import { dayKey } from '../grimorio/grimorio-rules.js';
 
 const ApplicationV2 = globalThis.foundry?.applications?.api?.ApplicationV2 ?? class {};
-const GLYPH = { leveler: '↗', buscador: '⌕', grimorio: '✦', escriba: '≡', usurpador: '◆', engenhocas: '⚙', regras: '⚖' };
+const GLYPH = { leveler: 'fa-route', buscador: 'fa-magnifying-glass', grimorio: 'fa-book', escriba: 'fa-feather', usurpador: 'fa-hand-sparkles', engenhocas: 'fa-gears', regras: 'fa-scale-balanced' };
+const glyph = id => `<i class="fa-solid ${GLYPH[id] ?? 'fa-circle-info'}" inert></i>`;
 const TOOL_OF = { leveler: 'planner' };
 
 const num = v => (Number.isFinite(Number(v)) ? Number(v) : 0);
@@ -118,7 +119,7 @@ export class HomeApp extends ApplicationV2 {
     position: { width: 940, height: 700 },
     actions: {
       t20nav: onNavigate,
-      theme: HomeApp.#onTheme,
+      theme: onTheme,
       openSheet: HomeApp.#onOpenSheet,
       openTool: HomeApp.#onOpenTool,
       pickActor: HomeApp.#onPickActor,
@@ -172,7 +173,7 @@ export class HomeApp extends ApplicationV2 {
       <div class="t20tk-home-bars">${bar('PV', s.pv.value, s.pv.max, 'pv', s.pv.temp ? ` <em>+${s.pv.temp}</em>` : '')}${bar('PM', s.pm.value, s.pm.max, 'pm')}</div>
     </section>`;
     const toolName = id => TOOLKIT_FEATURES.find(f => f.id === id)?.title ?? id;
-    const task = t => `<li class="t20tk-home-task" data-tone="${t.tone ?? 'info'}"><span class="t20tk-home-glyph">${GLYPH[t.tool] ?? '•'}</span><span><small>${escapeHtml(toolName(t.tool))}</small><b>${escapeHtml(t.text)}</b></span>
+    const task = t => `<li class="t20tk-home-task" data-tone="${t.tone ?? 'info'}"><span class="t20tk-home-glyph">${glyph(t.tool)}</span><span><small>${escapeHtml(toolName(t.tool))}</small><b>${escapeHtml(t.text)}</b></span>
       ${t.action ? `<button type="button" class="t20tk-ui-button ${t.tone === 'warn' ? 't20tk-ui-button--primary' : ''}" data-action="openTool" data-tool="${t.tool}">${escapeHtml(t.action)} →</button>` : ''}</li>`;
     const todo = s.todo.length
       ? `<ul class="t20tk-home-tasks">${s.todo.map(task).join('')}</ul>`
@@ -186,7 +187,7 @@ export class HomeApp extends ApplicationV2 {
   }
 
   #renderTools(relevant) {
-    const tool = f => `<button type="button" class="t20tk-home-tool" data-action="openTool" data-tool="${f.id}" title="${escapeHtml(f.description)}"><span class="t20tk-home-glyph">${GLYPH[f.id] ?? '•'}</span><span><b>${escapeHtml(f.title)}</b><small>${escapeHtml(f.short ?? '')}</small></span></button>`;
+    const tool = f => `<button type="button" class="t20tk-home-tool" data-action="openTool" data-tool="${f.id}" title="${escapeHtml(f.description)}"><span class="t20tk-home-glyph">${glyph(f.id)}</span><span><b>${escapeHtml(f.title)}</b><small>${escapeHtml(f.short ?? '')}</small></span></button>`;
     const avail = TOOLKIT_FEATURES.filter(f => ['available', 'preview'].includes(f.status) && (f.id !== 'regras' || game.user?.isGM));
     const mine = avail.filter(f => relevant.has(f.id));
     const rest = avail.filter(f => !relevant.has(f.id));
@@ -235,7 +236,6 @@ export class HomeApp extends ApplicationV2 {
 
   static async #onReport() { await openReport({ actor: this.actor }); }
 
-  static async #onTheme(event, target) { await switchTheme(target.dataset.themeValue); }
   static #onOpenSheet() { this.actor?.sheet?.render(true); }
 }
 

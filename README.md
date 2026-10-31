@@ -49,4 +49,4 @@ No **Início** do Toolkit, clique em **Relatar problema** (ou rode `game.t20Tool
 
 ## Créditos
 
-Autor: Bet. Tormenta20 é © Jambô Editora; este módulo é um projeto de fãs, sem afiliação. Fontes Inter e Lora sob a SIL Open Font License (veja `fonts/`).
+Autor: Bet. Tormenta20 é © Jambô Editora; este módulo é um projeto de fãs, sem afiliação. O visual segue o tema claro/escuro escolhido no Foundry.

@@ -120,7 +120,7 @@ export function renderRetroLevel(app) {
     const on = fold(r.cls) === x.key;
     const off = !on && x.left <= 0;
     return `<button type="button" class="t20tk-lv-class ${on ? 'is-on' : ''}" data-action="rtrClass" data-value="${escapeHtml(x.name)}" ${off || !can ? 'disabled' : ''}>
-      <span class="t20tk-wz-noimg">✦</span><span><b>${escapeHtml(x.name)}</b><small>${on ? `${r.classLevel}º nível de ${escapeHtml(x.name)}` : off ? 'todos os níveis já registrados' : `${x.left} nível(is) sem registro`}</small></span></button>`;
+      <span class="t20tk-wz-noimg"><i class="fa-solid fa-star" inert></i></span><span><b>${escapeHtml(x.name)}</b><small>${on ? `${r.classLevel}º nível de ${escapeHtml(x.name)}` : off ? 'todos os níveis já registrados' : `${x.left} nível(is) sem registro`}</small></span></button>`;
   };
   const classes = `<section class="t20tk-wz-box"><header><b>Classe deste nível</b><small>Em qual classe da ficha o personagem subiu no ${level}º nível?</small></header>
     <div class="t20tk-lv-classes">${r.options.map(clsCard).join('')}</div></section>`;
@@ -133,14 +133,14 @@ export function renderRetroLevel(app) {
       if (gain.kind === 'ability') {
         const a = abilityItem(app, gain.item, claimed);
         const em = a.already ? `já registrada no ${flagsOf(a.already).plannerLevel || '?'}º nível (melhora sozinha)` : a.item ? 'está na ficha: entra no registro deste nível' : 'não está na ficha';
-        return `<div class="t20tk-lv-gain" data-kind="ability">${a.item?.img ? `<img src="${escapeHtml(a.item.img)}" alt="">` : '<span class="t20tk-wz-noimg">◆</span>'}<span><small>Habilidade de classe</small><b>${escapeHtml(gain.item)}</b><em>${escapeHtml(em)}</em></span></div>`;
+        return `<div class="t20tk-lv-gain" data-kind="ability">${a.item?.img ? `<img src="${escapeHtml(a.item.img)}" alt="">` : '<span class="t20tk-wz-noimg"><i class="fa-solid fa-diamond" inert></i></span>'}<span><small>Habilidade de classe</small><b>${escapeHtml(gain.item)}</b><em>${escapeHtml(em)}</em></span></div>`;
       }
-      if (gain.kind === 'spells') return `<div class="t20tk-lv-gain" data-kind="spells"><span class="t20tk-wz-noimg">✦</span><span><small>Magias</small><b>${escapeHtml(gain.label)}</b><em>as magias da ficha não precisam de registro</em></span></div>`;
+      if (gain.kind === 'spells') return `<div class="t20tk-lv-gain" data-kind="spells"><span class="t20tk-wz-noimg"><i class="fa-solid fa-star" inert></i></span><span><small>Magias</small><b>${escapeHtml(gain.label)}</b><em>as magias da ficha não precisam de registro</em></span></div>`;
       if (gain.kind === 'note') return `<div class="t20tk-lv-gain" data-kind="note"><span class="t20tk-wz-noimg">!</span><span><small>Habilidade</small><b>${escapeHtml(gain.label)}</b><em>só referência</em></span></div>`;
       if (gain.kind !== 'power' && gain.kind !== 'path') return '';
       const item = r.picks[gain.id] ? app.actor.items.get(r.picks[gain.id]) : null;
       const body = item
-        ? `<div class="t20tk-lv-gain" data-kind="power">${item.img ? `<img src="${escapeHtml(item.img)}" alt="">` : '<span class="t20tk-wz-noimg">✦</span>'}<span><small>${escapeHtml(TIPO_LABEL[item.system?.tipo] ?? 'Poder')}</small><b>${escapeHtml(item.name)}</b>${gain.def ? `<em>por ${escapeHtml(gain.def.name)}: nível efetivo vale para este poder</em>` : ''}</span></div>`
+        ? `<div class="t20tk-lv-gain" data-kind="power">${item.img ? `<img src="${escapeHtml(item.img)}" alt="">` : '<span class="t20tk-wz-noimg"><i class="fa-solid fa-star" inert></i></span>'}<span><small>${escapeHtml(TIPO_LABEL[item.system?.tipo] ?? 'Poder')}</small><b>${escapeHtml(item.name)}</b>${gain.def ? `<em>por ${escapeHtml(gain.def.name)}: nível efetivo vale para este poder</em>` : ''}</span></div>`
         : '<p class="t20tk-lv-empty">Não indicado (deixe vazio se o personagem não pegou nada aqui)</p>';
       return `<div class="t20tk-lv-slot ${item ? 'is-done' : ''}"><header><small>${escapeHtml(gain.label)}</small>
         <span>${item && can ? `<button type="button" class="t20tk-bz-link" data-action="rtrUnpick" data-gain="${gain.id}">remover</button>` : ''}${can ? `<button type="button" class="t20tk-ui-button ${item ? '' : 't20tk-ui-button--primary'}" data-action="rtrBrowse" data-gain="${gain.id}">${item ? 'Trocar…' : 'Indicar da ficha…'}</button>` : ''}</span></header>${body}</div>`;
@@ -155,7 +155,7 @@ export function renderRetroLevel(app) {
     race = `<section class="t20tk-wz-box"><header><b>Criação</b><small>Raça e origem entram no registro do 1º nível. Habilidades raciais, poderes de origem e o resto vão na página "De onde veio".</small></header>
       <div class="t20tk-lv-gains">
         <div class="t20tk-lv-gain"><span class="t20tk-wz-noimg">☉</span><span><small>Raça</small><b>${escapeHtml(raceItem?.name ?? 'sem raça na ficha')}</b></span></div>
-        <div class="t20tk-lv-gain"><span class="t20tk-wz-noimg">⌂</span><span><small>Origem</small><b>${escapeHtml(origin || 'campo Origem vazio na ficha')}</b></span></div>
+        <div class="t20tk-lv-gain"><span class="t20tk-wz-noimg"><i class="fa-solid fa-house" inert></i></span><span><small>Origem</small><b>${escapeHtml(origin || 'campo Origem vazio na ficha')}</b></span></div>
       </div></section>`;
   }
 
@@ -189,7 +189,7 @@ function renderRetroBrowser(app, r) {
     const sel = cur === i.id;
     const off = taken.has(i.id);
     const sub = plainText(i.system?.description?.value ?? '').slice(0, 140);
-    return `<li class="t20tk-wz-card ${sel ? 'is-selected' : ''} ${off ? 'is-off' : ''}">${i.img ? `<img src="${escapeHtml(i.img)}" alt="" loading="lazy">` : '<span class="t20tk-wz-noimg">✦</span>'}
+    return `<li class="t20tk-wz-card ${sel ? 'is-selected' : ''} ${off ? 'is-off' : ''}">${i.img ? `<img src="${escapeHtml(i.img)}" alt="" loading="lazy">` : '<span class="t20tk-wz-noimg"><i class="fa-solid fa-star" inert></i></span>'}
       <span class="t20tk-wz-copy"><b>${escapeHtml(i.name)}</b><small>${escapeHtml(sub)}${sub.length >= 140 ? '…' : ''}</small>
         <span class="t20tk-wz-tags"><i>${escapeHtml(TIPO_LABEL[i.system?.tipo] ?? 'Poder')}</i>${i.system?.subtipo ? `<i>${escapeHtml(i.system.subtipo)}</i>` : ''}${off ? '<i data-tone="warn">em outra vaga</i>' : ''}</span></span>
       <button type="button" class="t20tk-ui-button ${sel ? 't20tk-ui-button--primary' : ''}" data-action="rtrPick" data-gain="${gain.id}" data-value="${i.id}" ${off && !sel ? 'disabled' : ''}>${sel ? 'Selecionado' : 'Selecionar'}</button></li>`;
@@ -229,7 +229,7 @@ export function renderRetroPage(app) {
   const row = i => {
     const cur = pick[i.id] ?? suggestedSource(i);
     const chips = opts.map(([v, l]) => `<button type="button" class="t20tk-chip ${cur === v ? 'is-on' : ''}" data-action="rtrSource" data-item="${i.id}" data-value="${escapeHtml(v)}" ${can ? '' : 'disabled'}>${escapeHtml(l)}</button>`).join('');
-    return `<li class="t20tk-xg-item">${i.img ? `<img src="${escapeHtml(i.img)}" alt="">` : '<span class="t20tk-wz-noimg">✦</span>'}
+    return `<li class="t20tk-xg-item">${i.img ? `<img src="${escapeHtml(i.img)}" alt="">` : '<span class="t20tk-wz-noimg"><i class="fa-solid fa-star" inert></i></span>'}
       <span class="t20tk-xg-copy"><small>${escapeHtml(TIPO_LABEL[i.system?.tipo] ?? 'Poder')}${i.system?.subtipo ? ` · ${escapeHtml(i.system.subtipo)}` : ''}</small><b>${escapeHtml(i.name)}</b>
         <div class="t20tk-wz-chips">${chips}</div></span></li>`;
   };
@@ -242,7 +242,7 @@ export function renderRetroPage(app) {
     : '<p class="t20tk-xg-empty">Nenhum poder da ficha sem origem.</p>';
   const done = [...(app.actor?.items ?? [])].filter(i => flagsOf(i).source);
   const doneHtml = done.length ? `<section class="t20tk-wz-box"><header><b>Já com origem</b><small>${done.length} item(ns)</small></header>
-    <ul class="t20tk-xg-list">${done.map(i => `<li class="t20tk-xg-item">${i.img ? `<img src="${escapeHtml(i.img)}" alt="">` : '<span class="t20tk-wz-noimg">✦</span>'}
+    <ul class="t20tk-xg-list">${done.map(i => `<li class="t20tk-xg-item">${i.img ? `<img src="${escapeHtml(i.img)}" alt="">` : '<span class="t20tk-wz-noimg"><i class="fa-solid fa-star" inert></i></span>'}
       <span class="t20tk-xg-copy"><small>${escapeHtml(sourceText(flagsOf(i).source))}</small><b>${escapeHtml(i.name)}</b></span>
       ${can ? `<button type="button" class="t20tk-bz-link" data-action="rtrSourceUndo" data-item="${i.id}">desfazer</button>` : ''}</li>`).join('')}</ul></section>` : '';
   return `<div class="t20tk-lv-page">

@@ -1,27 +1,38 @@
-/* T20 Toolkit — Design System v0.15 (Figma), tokens e Hub
- * Exclusivamente sob .t20tk-shell. Sem regras de html, :root, .app, ActorSheet ou body.
- * O Engenhocas é uma ferramenta do Toolkit. Suas flags e operações não dependem deste CSS.
+/* T20 Toolkit — tokens de cor e Hub.
+ * A moldura põe na janela as classes de tema do Foundry (themed theme-light|theme-dark): o tema do Foundry por padrão,
+ * ou o escolhido no botão de tema (ui/theme-controller.js). Assim texto, botões e campos vêm das variáveis do Foundry V13
+ * e o resto usa light-dark(), que lê o color-scheme dessas classes. O vermelho T20 é a cor de destaque.
+ * Exclusivamente sob .t20tk-shell e .t20tk-engenhocas-dialog. Sem regras de html, :root, .app, ActorSheet ou body.
  */
-.t20tk-shell[data-theme="light"], .t20tk-engenhocas-dialog[data-t20tk-tool-theme="light"] {
-  --t20-bg-canvas:#E7DFD4;--t20-bg-window:#F5EFE6;--t20-bg-surface:#FFF9F1;
-  --t20-bg-surface-alt:#EEE3D6;--t20-bg-interactive:#E7D8CA;--t20-bg-selected:#F1D7D3;
-  --t20-text-primary:#291F1E;--t20-text-secondary:#665453;--t20-text-on-accent:#FFFFFF;
-  --t20-border-subtle:#D1BEB2;--t20-border-strong:#9F7971;--t20-accent:#A41D2C;
-  --t20-accent-hover:#7E1725;--t20-accent-soft:#ECD2D2;--t20-success:#256344;
-  --t20-warning:#805311;--t20-error:#AA2B38;--t20-focus-ring:#BF3445;
+.t20tk-shell, .t20tk-engenhocas-dialog {
+  color-scheme: var(--color-scheme, light dark);
+  --t20-bg-canvas: light-dark(rgb(0 0 0 / .05), rgb(255 255 255 / .03));
+  --t20-bg-window: transparent;
+  --t20-bg-surface: light-dark(rgb(255 255 255 / .4), rgb(255 255 255 / .05));
+  --t20-bg-surface-alt: light-dark(rgb(0 0 0 / .06), rgb(255 255 255 / .08));
+  --t20-bg-interactive: light-dark(rgb(0 0 0 / .1), rgb(255 255 255 / .1));
+  --t20-bg-selected: color-mix(in srgb, var(--t20-accent) 16%, transparent);
+  --t20-text-primary: var(--color-text-primary);
+  --t20-text-secondary: light-dark(var(--color-dark-4, #444), var(--color-light-5, #9f8475));
+  --t20-text-on-accent: light-dark(#FFFFFF, #1D1217);
+  --t20-border-subtle: light-dark(rgb(0 0 0 / .18), rgb(255 255 255 / .14));
+  --t20-border-strong: light-dark(rgb(0 0 0 / .4), rgb(255 255 255 / .32));
+  --t20-accent: light-dark(#A41D2C, #EA7480);
+  --t20-accent-hover: light-dark(#7E1725, #FF9DA6);
+  --t20-accent-soft: color-mix(in srgb, var(--t20-accent) 12%, transparent);
+  --t20-success: light-dark(#256344, #93D2B1);
+  --t20-warning: light-dark(#805311, #EAC177);
+  --t20-error: light-dark(#AA2B38, #FFA1A8);
+  --t20-focus-ring: var(--t20-accent);
 }
-.t20tk-shell[data-theme="dark"], .t20tk-engenhocas-dialog[data-t20tk-tool-theme="dark"] {
-  --t20-bg-canvas:#141115;--t20-bg-window:#211B21;--t20-bg-surface:#2C252D;
-  --t20-bg-surface-alt:#392E37;--t20-bg-interactive:#463642;--t20-bg-selected:#512B39;
-  --t20-text-primary:#F8EEE4;--t20-text-secondary:#C8B6AD;--t20-text-on-accent:#1D1217;
-  --t20-border-subtle:#594650;--t20-border-strong:#8C666C;--t20-accent:#EA7480;
-  --t20-accent-hover:#FF9DA6;--t20-accent-soft:#603442;--t20-success:#93D2B1;
-  --t20-warning:#EAC177;--t20-error:#FFA1A8;--t20-focus-ring:#F1A4A9;
-}
+/* Fundo da janela no tema da moldura, mesmo quando ele difere do tema do Foundry.
+ * O pergaminho é o do Foundry (public/ui), com caminho relativo a modules/t20-toolkit/styles/. */
+.t20tk-shell.theme-light { --t20-bg-window: #efe6d8 url("../../../ui/parchment.jpg") repeat; }
+.t20tk-shell.theme-dark { --t20-bg-window: var(--color-cool-5, #0b0a13); }
 .t20tk-shell.t20tk-hub,.t20tk-shell.t20tk-hub *{box-sizing:border-box}
 .t20tk-shell.t20tk-hub{container-type:inline-size;display:flex;padding:0;overflow:auto;width:100%;min-width:0;max-height:min(82vh,900px);min-height:420px;line-height:1.43;background:var(--t20-bg-window);color:var(--t20-text-primary);font-family:var(--t20-font-ui)}
 .t20tk-shell.t20tk-hub :where(h2,h3,p){color:inherit}
-.t20tk-ui-sidebar{flex:0 0 208px;min-width:0;min-height:100%;background:var(--t20-bg-canvas);padding:17px 11px;border-top:4px solid var(--t20-accent)}
+.t20tk-ui-sidebar{flex:0 0 208px;min-width:0;min-height:100%;background:var(--t20-bg-canvas);padding:17px 11px}
 .t20tk-ui-brand{display:flex;flex-direction:column;gap:5px;padding:0 6px 18px}
 .t20tk-ui-brand strong{color:var(--t20-accent);font-family:var(--t20-font-head);font-size:19px;letter-spacing:.01em}
 .t20tk-ui-brand small{font-size:10px;color:var(--t20-text-secondary);letter-spacing:.055em;font-weight:650}
@@ -32,7 +43,8 @@
 .t20tk-shell .t20tk-ui-navitem.is-current{background:var(--t20-bg-selected);color:var(--t20-accent);font-weight:720}
 .t20tk-shell .t20tk-ui-navitem:disabled{opacity:.55;cursor:not-allowed}
 .t20tk-shell .t20tk-ui-navitem:not(:disabled):hover{background:var(--t20-bg-interactive);color:var(--t20-text-primary)}
-.t20tk-ui-navicon{flex:0 0 19px;display:inline-block;text-align:center;font-size:18px}
+.t20tk-ui-navicon{flex:0 0 19px;display:inline-block;text-align:center;font-size:14px;color:var(--t20-text-secondary)}
+.t20tk-shell .t20tk-ui-navitem.is-current .t20tk-ui-navicon{color:var(--t20-accent)}
 .t20tk-ui-navtext{min-width:0;overflow-wrap:anywhere}
 .t20tk-ui-workspace{min-width:0;flex:1;background:var(--t20-bg-window)}
 .t20tk-ui-toolbar{position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:58px;padding:9px 19px;color:var(--t20-text-secondary);font-size:12px;background:var(--t20-bg-surface);border-bottom:1px solid var(--t20-border-subtle)}
@@ -41,16 +53,12 @@
 .t20tk-ui-intro h2{font-family:var(--t20-font-head);font-weight:700;font-size:26px;border:0;margin:0 0 8px;padding:0;line-height:1.25}
 .t20tk-ui-intro>p:last-child{font-size:13px;color:var(--t20-text-secondary);margin:0;line-height:1.5}
 .t20tk-ui-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin:21px 0}
-.t20tk-shell .t20tk-ui-button{width:auto;min-width:0;min-height:30px;font-size:11px;padding:5px 9px;line-height:1.25;color:var(--t20-text-primary);background:var(--t20-bg-interactive);border:1px solid var(--t20-border-subtle);border-radius:6px;box-shadow:none;text-shadow:none;overflow-wrap:anywhere;white-space:normal}
-.t20tk-shell .t20tk-ui-button--primary{background:var(--t20-accent);border-color:var(--t20-accent);color:var(--t20-text-on-accent)}
-.t20tk-shell .t20tk-ui-button:not(:disabled):hover{background:var(--t20-accent-hover);color:var(--t20-text-on-accent)}
 .t20tk-ui-unavailable{font-size:11px;color:var(--t20-text-secondary)}
 .t20tk-ui-notice{background:var(--t20-bg-surface-alt);border-radius:9px;padding:15px 18px}
 .t20tk-ui-notice strong{font-size:13px}.t20tk-ui-notice p{margin:7px 0 0;color:var(--t20-text-secondary);font-size:12px;line-height:1.45}
 .t20tk-shell.t20tk-hub :is(button,input,select):focus-visible{outline:3px solid var(--t20-focus-ring)!important;outline-offset:2px}
 @container (max-width:790px){.t20tk-ui-sidebar{flex-basis:68px;padding:15px 7px}.t20tk-ui-brand{padding:0 0 14px;text-align:center}.t20tk-ui-brand strong{font-size:14px}.t20tk-ui-brand small,.t20tk-ui-navheading,.t20tk-ui-navtext{display:none}.t20tk-shell .t20tk-ui-navitem{justify-content:center;padding:7px 3px}.t20tk-ui-navicon{flex-basis:26px;font-size:20px}.t20tk-ui-grid{grid-template-columns:1fr 1fr}}
 @container (max-width:610px){.t20tk-ui-grid{grid-template-columns:1fr}.t20tk-ui-content{padding:17px}.t20tk-ui-card{min-height:126px}.t20tk-ui-card__body{padding:12px}.t20tk-ui-intro h2{font-size:22px}}
-@container (max-width:360px){.t20tk-ui-sidebar{flex-basis:47px;padding:11px 3px}.t20tk-ui-brand strong{font-size:11px}.t20tk-ui-toolbar{padding:7px}.t20tk-ui-toolbar>span{display:none}.t20tk-ui-theme-switch{margin-left:auto}.t20tk-ui-theme-switch button span{display:none}.t20tk-ui-content{padding:10px}.t20tk-ui-card__body{padding:10px}.t20tk-ui-card h3{font-size:14px}}
 @media(prefers-reduced-motion:reduce){.t20tk-shell *{scroll-behavior:auto!important;transition:none!important}}
 
 /* Hub — alinhado ao Figma v0.15 (Hub • Compacto) */
@@ -59,12 +67,9 @@
 .application:has(.t20tk-hub) .form-footer { display: none; }
 .t20tk-shell.t20tk-hub :where(h2,h3,h4){border:0;text-shadow:none}
 .t20tk-shell.t20tk-hub{border-radius:0;font-size:13px}
-.t20tk-ui-sidebar{border-top-width:6px}
 .t20tk-ui-brand strong{font-weight:700}
 .t20tk-shell .t20tk-ui-navitem{justify-content:flex-start;font-family:var(--t20-font-ui);height:auto}
 .t20tk-ui-toolbar>span i{font-style:normal;margin:0 4px;opacity:.7}
-.t20tk-shell.t20tk-hub .t20tk-theme-btn{flex:0 0 auto;width:46px;height:34px;min-height:0;padding:0;margin:0;border:0;border-radius:8px;background:var(--t20-bg-interactive);color:var(--t20-accent);font-size:16px;font-weight:700;box-shadow:none}
-.t20tk-shell.t20tk-hub .t20tk-theme-btn:hover{background:var(--t20-bg-selected)}
 .t20tk-ui-intro h2{font-size:24px}
 .t20tk-ui-grid{gap:12px;margin:18px 0}
 .t20tk-ui-card{position:relative;display:flex;min-width:0;overflow:hidden;background:var(--t20-bg-surface);border:1px solid var(--t20-border-subtle);border-radius:8px}
@@ -80,12 +85,6 @@
 .t20tk-ui-card__open:hover .t20tk-ui-card__arrow{transform:translateX(3px)}
 .t20tk-ui-card__open.is-off{opacity:.6;cursor:default}
 .t20tk-ui-card__actions{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 12px 12px;margin-top:-6px}
-.t20tk-shell .t20tk-ui-button{width:auto;min-width:0;min-height:30px;height:auto;margin:0;font-family:var(--t20-font-ui);font-size:12px;font-weight:700;padding:5px 12px;line-height:1.2;color:var(--t20-text-primary);background:var(--t20-bg-interactive);border:0;border-radius:8px;box-shadow:none;text-shadow:none;white-space:nowrap}
-.t20tk-shell .t20tk-ui-button--primary{background:var(--t20-accent);color:var(--t20-text-on-accent)}
-.t20tk-shell .t20tk-ui-button:not(:disabled):hover{background:var(--t20-bg-selected);color:var(--t20-accent)}
-.t20tk-shell .t20tk-ui-button--primary:not(:disabled):hover{background:var(--t20-accent-hover);color:var(--t20-text-on-accent)}
+.t20tk-shell .t20tk-ui-button{width:auto;min-width:0;min-height:30px;height:auto;margin:0;font-family:var(--t20-font-ui);font-size:12px;font-weight:600;padding:5px 12px;line-height:1.2;white-space:nowrap}
+.t20tk-shell .t20tk-ui-button--primary{--button-background-color:var(--t20-accent);--button-border-color:var(--t20-accent);--button-text-color:var(--t20-text-on-accent);--button-hover-background-color:var(--t20-accent-hover);--button-hover-border-color:var(--t20-accent-hover);--button-hover-text-color:var(--t20-text-on-accent)}
 .t20tk-ui-notice{border-radius:8px}
-/* Seletor de tema em duas partes (janela Engenhocas) */
-.t20tk-ui-theme-switch{display:flex;gap:3px;padding:3px;background:var(--t20-bg-interactive);border-radius:8px}
-.t20tk-shell .t20tk-ui-theme-switch button{color:var(--t20-text-primary);background:transparent;border:0;box-shadow:none;text-shadow:none;font-family:var(--t20-font-ui);font-size:12px;font-weight:700;min-height:29px;height:auto;padding:4px 8px;border-radius:6px;line-height:1.2;min-width:0;width:auto}
-.t20tk-shell .t20tk-ui-theme-switch button[aria-pressed="true"]{background:var(--t20-bg-selected);color:var(--t20-accent)}

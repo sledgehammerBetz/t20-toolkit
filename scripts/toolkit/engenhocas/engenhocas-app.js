@@ -11,7 +11,7 @@ import { SPELL_TYPES, SPELL_SCHOOLS, CIRCLES, escapeHtml, fold } from '../core/t
 import { getSpellCatalog } from '../core/spells/spell-catalog.js';
 import { filterSpells, filterOptions, EMPTY_FILTERS } from '../core/spells/spell-filter.js';
 import { spellFilterPanel, bindSpellFilterPanel, viaTags } from '../ui/spell-filter-panel.js';
-import { toolFrame, onNavigate, switchTheme } from '../ui/frame.js';
+import { toolFrame, onNavigate, onTheme } from '../ui/frame.js';
 import { metric, pill } from '../ui/components.js';
 import { APARATOS, APARATO_BY_ID, CRAFTABLE_TYPES, craftCheck, activationDC, aparatoBlocker, engenhocaState } from './engenhocas-rules.js';
 import { actorInventor, actorEngenhocas, craftEngenhoca, activateEngenhoca, repairEngenhoca, newDay, newScene, dismantleEngenhoca, installAparato, removeAparato, couplingArmors, automatoUsed, coupleEngenhoca, uncoupleEngenhoca, syncEngenhocas, activationSubstitutes } from './engenhocas-actions.js';
@@ -52,8 +52,8 @@ export class EngenhocasApp extends ApplicationV2 {
       openItem: EngenhocasApp.#onOpenItem,
       couple: EngenhocasApp.#onCouple,
       uncouple: EngenhocasApp.#onUncouple,
-      theme: EngenhocasApp.#onTheme,
       t20nav: onNavigate,
+      theme: onTheme,
       openSheet: EngenhocasApp.#onOpenSheet
     }
   };
@@ -96,7 +96,7 @@ export class EngenhocasApp extends ApplicationV2 {
   async _renderHTML() {
     const inv = this.inv();
     const who = inv ? (inv.level ? `Inventor ${inv.level}` : 'sem nível de inventor') : '';
-    const seg = `<div class="t20tk-es-tabs" role="tablist">${VIEWS.map(([id, label]) => `<button type="button" role="tab" data-action="view" data-view="${id}" aria-pressed="${this.ui.view === id}">${label}${id === 'bancada' && this.actor ? ` <span class="t20tk-count">${this.items().length}</span>` : ''}</button>`).join('')}${this.ui.view === 'bancada' && this.actor ? '<span class="t20tk-eng-tools"><button type="button" class="t20tk-ui-button" data-action="newDay" title="Zera as ativações do dia e a refrigeração">☀ Novo dia</button><button type="button" class="t20tk-ui-button" data-action="newScene" title="Libera os Supressores de Segurança">Nova cena</button></span>' : ''}</div>`;
+    const seg = `<div class="t20tk-es-tabs" role="tablist">${VIEWS.map(([id, label]) => `<button type="button" role="tab" data-action="view" data-view="${id}" aria-pressed="${this.ui.view === id}">${label}${id === 'bancada' && this.actor ? ` <span class="t20tk-count">${this.items().length}</span>` : ''}</button>`).join('')}${this.ui.view === 'bancada' && this.actor ? '<span class="t20tk-eng-tools"><button type="button" class="t20tk-ui-button" data-action="newDay" title="Zera as ativações do dia e a refrigeração"><i class="fa-solid fa-sun" inert></i> Novo dia</button><button type="button" class="t20tk-ui-button" data-action="newScene" title="Libera os Supressores de Segurança">Nova cena</button></span>' : ''}</div>`;
     const body = this.ui.view === 'oficina' ? this.#renderOficina() : this.ui.view === 'aparatos' ? this.#renderAparatos() : this.#renderBancada();
     return toolFrame({
       tool: 'engenhocas', extra: 't20tk-eng', actor: this.actor, who,
@@ -360,7 +360,7 @@ export class EngenhocasApp extends ApplicationV2 {
       const isSel = sel === a.id;
       return `<li class="t20tk-bz-row t20tk-card ${isSel ? 'is-selected' : ''}" data-status="${installed.length ? 'owned' : 'allowed'}">
         <button type="button" class="t20tk-bz-main" data-action="pickAparato" data-type="${a.id}" aria-pressed="${isSel}">
-          <span class="t20tk-card-noimg" aria-hidden="true">⚙</span>
+          <span class="t20tk-card-noimg" aria-hidden="true"><i class="fa-solid fa-gears" inert></i></span>
           <span class="t20tk-card-copy">
             <span class="t20tk-bz-name">${escapeHtml(a.label)}</span>
             <span class="t20tk-card-meta">${escapeHtml(a.text)}</span>
@@ -389,7 +389,7 @@ export class EngenhocasApp extends ApplicationV2 {
       return `<label class="t20tk-bz-check ${why ? 'is-off' : ''}"><input type="checkbox" data-ui="target" value="${i.id}" ${targets.has(i.id) ? 'checked' : ''} ${why ? 'disabled' : ''}> <b>${escapeHtml(i.name)}</b> <span class="t20tk-bz-meta">${st.aparatos.length}/2${why ? ` · ${escapeHtml(why)}` : ''}</span></label>`;
     }).join('');
     const ready = this.ui.targets.length === def.targets;
-    return `<div class="t20tk-detail-head"><span class="t20tk-card-noimg t20tk-card-noimg--big" aria-hidden="true">⚙</span><div>
+    return `<div class="t20tk-detail-head"><span class="t20tk-card-noimg t20tk-card-noimg--big" aria-hidden="true"><i class="fa-solid fa-gears" inert></i></span><div>
         <p class="t20tk-eyebrow">Aparato</p><h3>${escapeHtml(def.label)}</h3>
         <div class="t20tk-pills">${pill(`T$ ${def.price}`)}${pill(def.targets > 1 ? `${def.targets} engenhocas` : '1 engenhoca')}${def.auto ? pill('automático') : ''}</div>
       </div></div>
@@ -448,7 +448,6 @@ export class EngenhocasApp extends ApplicationV2 {
     if (item) await removeAparato(this.actor, item, target.dataset.type);
   }
 
-  static async #onTheme(event, target) { await switchTheme(target.dataset.themeValue); }
   static #onOpenSheet() { this.actor?.sheet?.render(true); }
 }
 

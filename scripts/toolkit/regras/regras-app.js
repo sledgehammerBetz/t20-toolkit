@@ -5,7 +5,7 @@
  */
 import { replaceKeepingPlace } from '../ui/render.js';
 import { escapeHtml } from '../core/t20.js';
-import { toolFrame, onNavigate, switchTheme } from '../ui/frame.js';
+import { toolFrame, onNavigate, onTheme } from '../ui/frame.js';
 import { getTableRules, setTableRules, ATTRIBUTE_METHODS, AGE_HEROIS } from '../core/table-rules.js';
 
 const ApplicationV2 = globalThis.foundry?.applications?.api?.ApplicationV2 ?? class {};
@@ -34,8 +34,8 @@ export class RegrasApp extends ApplicationV2 {
       setRule: RegrasApp.#onSetRule,
       toggleMethod: RegrasApp.#onToggleMethod,
       toggleAge: RegrasApp.#onToggleAge,
-      theme: RegrasApp.#onTheme,
       t20nav: onNavigate,
+      theme: onTheme,
       openSheet: () => {}
     }
   };
@@ -108,7 +108,6 @@ export class RegrasApp extends ApplicationV2 {
     await this.#save({ ages: { ...r.ages, [target.dataset.age]: !r.ages[target.dataset.age] } });
   }
 
-  static async #onTheme(event, target) { await switchTheme(target.dataset.themeValue); }
 }
 
 export async function openRegras({ actor = null } = {}) {

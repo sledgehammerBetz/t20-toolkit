@@ -24,7 +24,7 @@ import {
   TEST_SKILL, castCost, effectCost, skillSubstitutes, textBonuses, testParts, fixedBonus, testFormula, chanceOf
 } from './usurpador-rules.js';
 import { today } from '../grimorio/grimorio-app.js';
-import { toolFrame, onNavigate, switchTheme, reopen } from '../ui/frame.js';
+import { toolFrame, onNavigate, onTheme, reopen } from '../ui/frame.js';
 import { cardHTML } from '../ui/components.js';
 import { enrichDescription } from '../ui/enrich.js';
 
@@ -66,8 +66,8 @@ export class UsurpadorApp extends ApplicationV2 {
       togglePower: UsurpadorApp.#onTogglePower,
       endCapture: UsurpadorApp.#onEndCapture,
       cleanup: UsurpadorApp.#onCleanup,
-      theme: UsurpadorApp.#onTheme,
       t20nav: onNavigate,
+      theme: onTheme,
       openSheet: UsurpadorApp.#onOpenSheet,
       openSpell: UsurpadorApp.#onOpenSpell
     }
@@ -627,7 +627,6 @@ export class UsurpadorApp extends ApplicationV2 {
     if (ids.length) await this.actor.deleteEmbeddedDocuments('Item', ids);
   }
 
-  static async #onTheme(event, target) { await switchTheme(target.dataset.themeValue); }
   static #onOpenSheet() { this.actor?.sheet?.render(true); }
 
   /** Clique na magia: abre o Buscador nela (descrição e aprimoramentos). */

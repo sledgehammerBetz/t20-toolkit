@@ -1,10 +1,5 @@
-/* Fontes do T20 Toolkit (SIL OFL 1.1, veja fonts/README.md). Nomes próprios para não colidir com fontes instaladas. */
-@font-face { font-family: 'T20TK Inter'; src: url('../fonts/inter-regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: 'T20TK Inter'; src: url('../fonts/inter-semibold.woff2') format('woff2'); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'T20TK Inter'; src: url('../fonts/inter-bold.woff2') format('woff2'); font-weight: 700 900; font-style: normal; font-display: swap; }
-@font-face { font-family: 'T20TK Serif'; src: url('../fonts/Lora-Bold.woff2') format('woff2'); font-weight: 400 900; font-style: normal; font-display: swap; }
-
-.t20tk-shell {
-  --t20-font-ui: 'Inter', 'T20TK Inter', system-ui, sans-serif;
-  --t20-font-head: 'Merriweather', 'T20TK Serif', Georgia, serif;
+/* Fontes do T20 Toolkit: as mesmas do Foundry (Signika), para as janelas não destoarem do resto da mesa. */
+.t20tk-shell, .t20tk-chat {
+  --t20-font-ui: var(--font-body, var(--font-primary, "Signika", sans-serif));
+  --t20-font-head: var(--font-primary, "Signika", sans-serif);
 }
