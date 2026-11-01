@@ -135,7 +135,7 @@ async function confirmCraft(actor, recipe, info) {
         ${info.instavel && canUnstable(recipe) ? `<label class="t20tk-bz-check"><input type="checkbox" name="unstable" ${c.unstable ? 'checked' : ''}> Catalizador Instável (${UNSTABLE.pm} PM, você tem ${info.pm})</label>` : ''}
       </div>
       <p>Matéria-prima: <b>${escapeHtml(formatTC(cost))}</b>${c.units > 1 ? ' (duas unidades)' : ''} · tempo: <b>${unstable ? 'ação completa' : CRAFT_TIME}</b> · você tem ${escapeHtml(formatTC(info.money))}</p>
-      <label class="t20tk-bz-check"><input type="checkbox" name="pay" ${c.pay && enough ? 'checked' : ''} ${enough ? '' : 'disabled'}> Descontar a matéria-prima do dinheiro${enough ? '' : ' <small>(dinheiro insuficiente: acerte com o mestre)</small>'}</label>
+      <label class="t20tk-bz-check"><input type="checkbox" name="pay" ${c.pay && enough ? 'checked' : ''} ${enough ? '' : 'disabled'}> Descontar a matéria-prima do dinheiro (é gasta mesmo se o teste falhar)${enough ? '' : ' <small>(dinheiro insuficiente: acerte com o mestre)</small>'}</label>
       ${gm && !unstable ? '<label class="t20tk-bz-check"><input type="checkbox" name="advance"> Avançar 1 dia no relógio do mundo</label>' : ''}`;
   };
   const read = el => {
@@ -206,18 +206,22 @@ export async function craftRecipe(actor, recipe) {
   const cost = materialCost(recipe.price, { units, half: unstable });
   if (unstable && pmNow(actor) < UNSTABLE.pm) return ui.notifications.warn(`PM insuficientes: o Catalizador Instável custa ${UNSTABLE.pm} PM.`);
 
+  // Regra da mesa (decidida em 01/11/2026): o que o texto chama de custo é gasto qualquer que seja o resultado,
+  // a menos que o texto diga o contrário. A matéria-prima sai antes do teste e se perde na falha.
+  const paid = choice.pay && cost > 0 ? await pay(actor, cost) : null;
+  const costRow = ['Matéria-prima', cost ? `${formatTC(cost)}${paid ? ' (pago)' : ' (a acertar)'}` : 'sem custo'];
+
   let total = null;
   if (!unstable) {
     const r = await rollCraft(actor, recipe, choice.test, choice.take);
     total = r.total;
     if (!r.success) {
-      await postCard(actor, { tool: 'fabricacao', tone: 'error', title: 'Fabricação falhou', subtitle: recipe.name, rows: [['Teste', `${r.total} contra CD ${choice.test.dc}`], ['Tempo', CRAFT_TIME]], note: 'Nada foi descontado. Confira com o mestre se houve perda de material.' });
+      await postCard(actor, { tool: 'fabricacao', tone: 'error', title: 'Fabricação falhou', subtitle: recipe.name, rows: [['Teste', `${r.total} contra CD ${choice.test.dc}`], costRow, ['Tempo', CRAFT_TIME]], note: 'A matéria-prima e o tempo foram gastos.' });
       if (choice.advance && game.user.isGM) await game.time.advance(86400);
       return null;
     }
   } else await actor.spendMana(UNSTABLE.pm, 0, false);
 
-  const paid = choice.pay && cost > 0 ? await pay(actor, cost) : null;
   const source = await fromUuid(recipe.uuid);
   if (!source) return ui.notifications.error(`Não encontrei ${recipe.name} no compêndio.`);
   const data = craftedItemData(game.items.fromCompendium(source), recipe, { units, mestreCuca: info.mestreCuca, unstable, actorName: actor.name });
@@ -232,7 +236,7 @@ export async function craftRecipe(actor, recipe) {
     rows: [
       ['Teste', unstable ? 'sem teste (Catalizador Instável)' : `${choice.take === 'zero' ? 'escolheu 0' : total} contra CD ${choice.test.dc}`],
       ['Unidades', String(units)],
-      ['Matéria-prima', cost ? `${formatTC(cost)}${paid ? ' (pago)' : ' (a acertar)'}` : 'sem custo'],
+      costRow,
       ['Tempo', unstable ? 'ação completa' : CRAFT_TIME]
     ],
     items: [{ name: item?.name ?? data.name, img: data.img, note: benefit.join('; ') }],
