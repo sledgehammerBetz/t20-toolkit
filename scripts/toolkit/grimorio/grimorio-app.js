@@ -84,7 +84,7 @@ export class GrimorioApp extends ApplicationV2 {
       : 'Ainda não estudou o grimório.';
     const status = `<section class="t20tk-bz-profiles">
       <div class="t20tk-bz-profile">
-        <div class="t20tk-bz-profile-head"><strong>Memorização diária</strong> <span>JdA p. 36</span></div>
+        <div class="t20tk-bz-profile-head"><strong>Memorização diária</strong> <span>JdA p. 37</span></div>
         <div class="t20tk-bz-facts">
           <span>Conhece <b>${c.known.length}</b> magias arcanas</span>
           <span>Pode memorizar <b>${c.limit}</b></span>

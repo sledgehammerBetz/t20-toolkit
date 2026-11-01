@@ -1,5 +1,5 @@
 /**
- * Aviso/bloqueio ao lançar magia não memorizada (Mago, JdA p. 36).
+ * Aviso/bloqueio ao lançar magia não memorizada (Mago, JdA p. 37).
  * O sistema 1.5.015 não tem hook antes de usar um item, então envolvemos Item#roll
  * da classe de documento do sistema. Configurável pelo mestre: desligado, avisar, bloquear.
  */

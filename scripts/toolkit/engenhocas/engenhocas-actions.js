@@ -16,7 +16,7 @@ import {
   FLAG_SCOPE, FLAG_KEY, SKILL_KEY, APARATO_BY_ID, ENGENHOCA_ITEM_TYPE, COUPLE_PRICE, isEngenhoca, engenhocaState, engenhocaFlags, inventorContext,
   activationDC, activationExtras, activationCost, resistanceBonus, outcomePatch, NEW_DAY_PATCH, aparatoBlocker, buildEngenhocaItem, craftCheck,
   splitApplied, powerEffectKey, armorUpgradeCount, armorCapacity, coupleBlocker, actorEngenhocas,
-  engenhocaExecution, effectReminders, makerBlocker
+  engenhocaExecution, effectReminders, makerBlocker, limitCount
 } from './engenhocas-rules.js';
 
 const DialogV2 = () => foundry.applications.api.DialogV2;
@@ -68,7 +68,7 @@ export async function craftEngenhoca(actor, { uuid, name = '', mode = 'hand', ro
   const spell = await fromUuid(uuid);
   if (!spell) return ui.notifications.error('Magia não encontrada.');
   const inv = actorInventor(actor);
-  const check = craftCheck({ circle: Number(spell.system?.circulo), type: spell.system?.tipo }, { inventorLevel: inv.level, goblinoide: inv.goblinoide, owned: actorEngenhocas(actor).length, limit: inv.limit });
+  const check = craftCheck({ circle: Number(spell.system?.circulo), type: spell.system?.tipo }, { inventorLevel: inv.level, goblinoide: inv.goblinoide, owned: limitCount(actorEngenhocas(actor)), limit: inv.limit });
   if (!check.ok && !game.user.isGM) return ui.notifications.warn(check.reason);
   if (pay && money(actor) < check.price) return ui.notifications.warn(`Faltam T$ ${check.price - money(actor)} para fabricar (custa T$ ${check.price}).`);
   const finalName = name.trim() || `${spell.name} (engenhoca)`;
@@ -87,7 +87,7 @@ export async function craftEngenhoca(actor, { uuid, name = '', mode = 'hand', ro
     }
   }
 
-  const data = buildEngenhocaItem({ spell: { name: spell.name, img: spell.img, uuid: spell.uuid, system: spell.toObject().system, effects: spell.toObject().effects, flags: spell.toObject().flags }, name: finalName, mode, makerMaxPV: inv.maxPV, manutencao: inv.manutencao, inventorLevel: inv.level, price: check.price, userId: game.user.id, actorId: actor.id });
+  const data = buildEngenhocaItem({ spell: { name: spell.name, img: spell.img, uuid: spell.uuid, system: spell.toObject().system, effects: spell.toObject().effects, flags: spell.toObject().flags }, name: finalName, mode, makerMaxPV: inv.maxPV, manutencao: inv.manutencao, goblinoide: inv.goblinoide, inventorLevel: inv.level, price: check.price, userId: game.user.id, actorId: actor.id });
   const tp = money(actor) - check.price;
   const [[created]] = await Promise.all([actor.createEmbeddedDocuments('Item', [data]), pay && check.price ? actor.update({ 'system.dinheiro.tp': tp }) : null]);
   await postCard(actor, {
@@ -214,16 +214,21 @@ async function confirmActivation(actor, item, st, inv, sys) {
   const has = id => st.aparatos.includes(id);
   const saved = actor.getFlag?.(MODULE_ID, TEST_FLAG) ?? {};
   const c = { skill: saved.skill || SKILL_KEY, fx: { ...(saved.fx ?? {}) }, text: { ...(saved.text ?? {}) }, extra: 0, take: 'roll', refrigeration: false, calibrar: sys.powers.has('calibrar'), potente: false, rapida: false };
+  // Ativação Rápida só vale para engenhocas ativadas com ação padrão (JdA p. 68).
+  const standardAction = engenhocaExecution(item ? (engenhocaFlags(item)?.execution || st.snapshot?.system?.ativacao?.execucao) : '') === 'action';
+  // Engenhocaria Goblinoide: nunca escolhe 0, 10 ou 20 para ativar (HdA p. 158). Fabricar não entra nisso.
+  const noTake = !craft && inv.goblinoide;
   // Poderes com efeito na ficha já foram escolhidos na janela do sistema; sem efeito, o Toolkit oferece aqui.
   const options = craft ? [] : [
     has('sistema-refrigeracao') && !st.refrigerationUsedToday ? ['refrigeration', 'Sistema de Refrigeração', '−5 na CD por 1 PM (ação completa, 1× por dia)'] : null,
     inv.calibrar && !sys.powers.has('calibrar') ? ['calibrar', 'Forçar a Calibragem', '−5 no teste, +2 na CD para resistir'] : null,
     inv.potente && !sys.ownFx.has('potente') ? ['potente', 'Invenção Potente', '+1 PM, +2 na CD para resistir'] : null,
-    inv.rapida && !sys.ownFx.has('rapida') ? ['rapida', 'Ativação Rápida', '+2 PM, ativa com ação de movimento'] : null
+    inv.rapida && !sys.ownFx.has('rapida') && standardAction ? ['rapida', 'Ativação Rápida', '+2 PM, ativa com ação de movimento'] : null
   ].filter(Boolean);
   const calc = () => {
     const test = activationTest(actor, st, inv, c, { craft: !!craft });
     const dc = craft ? { dc: craft.dc, parts: [['Base', 20], ['Magia', craft.pm]] } : activationDC(st, { upgradePM: sys.spellPM, personalizado: inv.personalizado, refrigeration: c.refrigeration });
+    if (noTake) c.take = 'roll';
     if (c.take === 'zero' && !canChooseZero(dc.dc, test.parts)) c.take = 'roll';
     if (c.take === 'ten' && !inv.maestria && !craft) c.take = 'roll';
     const cost = activationCost({ upgradePM: sys.spellPM, powerPM: sys.powerPM + test.pmCost, comutador: has('comutador'), refrigeration: c.refrigeration, rapida: c.rapida, potente: c.potente, maestria: c.take === 'ten' && !craft });
@@ -248,10 +253,10 @@ async function confirmActivation(actor, item, st, inv, sys) {
       : check(`text.${t.id}`, !!c.text[t.id], `<b>${escapeHtml(t.source)}</b> <small>${escapeHtml(t.text)} (confira se vale aqui)</small>`))).join('');
     const opts = options.map(([k, label, note]) => check(k, !!c[k], `<b>${escapeHtml(label)}</b> <small>${escapeHtml(note)}</small>`)).join('');
     const fromSys = [...sys.powers].map(k => ({ calibrar: 'Forçar a Calibragem (−5 no teste)', potente: 'Invenção Potente', rapida: 'Ativação Rápida', avancada: 'Armadura Avançada (ação livre)', automato: 'Autômato Engenhocado' })[k]).filter(Boolean);
-    const zeroOk = canChooseZero(dc.dc, test.parts);
+    const zeroOk = !noTake && canChooseZero(dc.dc, test.parts);
     const takes = [chip('take', 'roll', c.take === 'roll', 'Rolar'),
       craft ? chip('take', 'ten', c.take === 'ten', 'Escolher 10', 'Fabricar não é situação de pressão')
-        : inv.maestria ? chip('take', 'ten', c.take === 'ten', 'Escolher 10 (Maestria em Perícia, 1 PM)', 'Só se a perícia for uma das escolhidas no poder') : '',
+        : inv.maestria && !noTake ? chip('take', 'ten', c.take === 'ten', 'Escolher 10 (Maestria em Perícia, 1 PM)', 'Só se a perícia for uma das escolhidas no poder') : '',
       zeroOk ? chip('take', 'zero', c.take === 'zero', 'Escolher 0', `O resultado é só o bônus (${test.bonus}): passa sem rolar, sem acerto crítico nem falha crítica`) : ''].join('');
     const formula = c.take === 'zero' ? `0 + ${test.bonus}` : c.take === 'ten' ? test.formula.replace(/^1d20/, '10') : test.formula;
     return `<p><b>CD ${dc.dc}</b> = ${dc.parts.map(([k, v], i) => `${i ? (v >= 0 ? ' + ' : ' − ') : ''}${Math.abs(v)} <small>(${escapeHtml(k.toLowerCase())})</small>`).join('')}</p>
@@ -401,6 +406,7 @@ export async function activateEngenhoca(item) {
 
   const notes = [];
   if (resBonus) notes.push(`CD para resistir +${resBonus} (já no cartão).`);
+  if (st.aparatos.includes('ligacao-convergencia')) notes.push('Ligação de Convergência: a engenhoca ligada a esta não pode ser ativada nesta cena.');
   if (choice.rapida || split.powers.has('rapida')) notes.push('Ativada com ação de movimento (Ativação Rápida).');
   if (split.powers.has('avancada')) notes.push('Ativada como ação livre (Armadura Avançada).');
   if (split.powers.has('automato')) notes.push('Ativada pelo autômato, com ação de movimento; o efeito sai dele (Autômato Engenhocado).');

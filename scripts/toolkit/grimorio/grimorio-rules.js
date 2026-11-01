@@ -1,5 +1,5 @@
 /**
- * Regras do Grimório do Mago (JdA p. 36): estudar o grimório por 1 hora, uma vez por dia,
+ * Regras do Grimório do Mago (JdA p. 37): estudar o grimório por 1 hora, uma vez por dia,
  * e memorizar metade (para baixo) das magias que conhece. Só pode lançar magias memorizadas.
  * Funções puras — sem Foundry.
  */
