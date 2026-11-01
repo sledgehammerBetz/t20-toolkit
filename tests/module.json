@@ -1,0 +1,16 @@
+{
+  "id": "t20-toolkit-tests",
+  "title": "T20 Toolkit — Testes",
+  "description": "Bateria de testes do T20 Toolkit (Quench). Só para o mundo de teste; não faz parte do pacote publicado.",
+  "version": "0.1.0",
+  "authors": [{ "name": "Bet" }],
+  "compatibility": { "minimum": "13", "verified": "13.351", "maximum": "13" },
+  "relationships": {
+    "systems": [{ "id": "tormenta20", "type": "system" }],
+    "requires": [
+      { "id": "quench", "type": "module" },
+      { "id": "t20-toolkit", "type": "module" }
+    ]
+  },
+  "esmodules": ["scripts/main.js"]
+}
