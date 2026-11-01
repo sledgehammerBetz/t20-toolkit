@@ -85,7 +85,9 @@ export async function craftEngenhoca(actor, { uuid, name = '', mode = 'hand', ro
     if (choice.cost.total) await actor.spendMana(choice.cost.total, 0, false);
     const ok = r.success;
     if (!ok) {
-      await postCard(actor, { tool: 'engenhocas', tone: 'error', title: 'Fabricação falhou', subtitle: finalName, rows: [['Teste', `${r.total} contra CD ${check.dc}`]], note: 'Nada foi descontado. Confira com o mestre se houve perda de material.' });
+      // Regra da mesa (01/11/2026): custo é gasto qualquer que seja o resultado, salvo texto em contrário.
+      if (pay && check.price) await actor.update({ 'system.dinheiro.tp': money(actor) - check.price });
+      await postCard(actor, { tool: 'engenhocas', tone: 'error', title: 'Fabricação falhou', subtitle: finalName, rows: [['Teste', `${r.total} contra CD ${check.dc}`], ['Preço', pay ? `T$ ${check.price} (gasto)` : 'não descontado']], note: 'O material e o tempo foram gastos.' });
       return null;
     }
   }
@@ -273,7 +275,7 @@ async function confirmActivation(actor, item, st, inv, sys) {
       <div class="t20tk-wz-chips">${takes}</div>
       <p>Teste: <b>${escapeHtml(formula)}</b> · chance <b>${chance}%</b> · PM: <b>${cost.total}</b> (você tem ${pmNow(actor)})</p>
       ${zeroOk ? '' : '<p class="t20tk-bz-meta">Escolher 0 aparece quando o bônus já alcança a CD.</p>'}
-      ${craft ? '<p class="t20tk-bz-note">Fabricar não sofre penalidade de armadura. Falhou: nada é descontado.</p>' : st.coupled?.kind === 'armor' ? '<p class="t20tk-bz-note">Acoplada na armadura: não precisa estar empunhada nem vestida.</p>' : st.coupled?.kind === 'automato' ? '<p class="t20tk-bz-note">Acoplada no autômato: com Autômato Engenhocado (+2 PM, ação de movimento), o efeito sai do autômato (alcance curto).</p>' : st.mode === 'hand' ? '<p class="t20tk-bz-note">Engenhoca empunhada: precisa de uma mão livre.</p>' : ''}`;
+      ${craft ? '<p class="t20tk-bz-note">Fabricar não sofre penalidade de armadura. Falhou: o preço e o tempo são gastos.</p>' : st.coupled?.kind === 'armor' ? '<p class="t20tk-bz-note">Acoplada na armadura: não precisa estar empunhada nem vestida.</p>' : st.coupled?.kind === 'automato' ? '<p class="t20tk-bz-note">Acoplada no autômato: com Autômato Engenhocado (+2 PM, ação de movimento), o efeito sai do autômato (alcance curto).</p>' : st.mode === 'hand' ? '<p class="t20tk-bz-note">Engenhoca empunhada: precisa de uma mão livre.</p>' : ''}`;
   };
   const read = el => {
     const n = el.name;
