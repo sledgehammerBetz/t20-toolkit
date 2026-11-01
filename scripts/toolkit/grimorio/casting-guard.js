@@ -5,6 +5,7 @@
  */
 import { MODULE_ID } from '../../constants.js';
 import { isMago } from './grimorio-state.js';
+import { isMagoSpell } from './grimorio-rules.js';
 import { escapeHtml } from '../core/t20.js';
 
 export const GUARD_SETTING = 'grimorioGuard';
@@ -22,7 +23,8 @@ export function registerCastingGuardSetting() {
 /** Precisa de verificação? Exportada para testes. */
 export function needsGuard(item, actor) {
   if (item?.type !== 'magia' || !actor || actor.type !== 'character') return false;
-  if (!['arc', 'uni'].includes(item.system?.tipo)) return false;
+  // Só magias do Mago: as de raça, poderes ou outra classe não precisam ser memorizadas.
+  if (!isMagoSpell(item.system?.tipo, item.flags?.[MODULE_ID]?.learnedBy ?? null)) return false;
   if (item.system?.preparada) return false;
   return isMago(actor);
 }

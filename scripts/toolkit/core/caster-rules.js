@@ -49,7 +49,7 @@ export function buildCasterProfiles({ classes = [], arcanistPaths = [], schoolsB
       level, tradition: def.tradition, maxCircle: circles,
       key: def.key, known: cls.extra?.known ?? def.known(level), source: cls.extra?.source ?? def.source, warnings: [], notes: [...(cls.extra?.notes ?? [])],
       schools: null, schoolsRequired: def.schools ?? 0,
-      necromancer: !!def.necromancer, usurper: !!def.usurper, path: null
+      necromancer: !!def.necromancer, usurper: !!def.usurper, path: null, fromPower: !!cls.extra
     };
     if (id === 'arcanista' && !cls.extra) {
       if (arcanistPaths.length > 1) profile.warnings.push(`A ficha tem mais de um Caminho do Arcanista (${arcanistPaths.join(', ')}). Remova o que não vale.`);
@@ -120,15 +120,28 @@ export function evaluateSpell(spell, profiles) {
 }
 
 /**
+ * `learnedBy` de magias que não ocupam escolhas de classe: raça e ganhos extras de poderes (JdA p. 171: magias de
+ * classe pertencem à classe com que são usadas). As usurpadas e as copiadas são contadas à parte.
+ */
+export const NOT_CLASS_SPELL = Object.freeze(new Set(['raca', 'poder']));
+
+/**
+ * Valor de `learnedBy` para uma magia aprendida pelo perfil: o id da classe, ou `poder:<classe>` quando o perfil vem
+ * de um poder de outra classe (conta na capacidade do poder, mas não é magia da classe).
+ */
+export const learnedByFor = profile => (!profile ? null : profile.fromPower ? `poder:${profile.id}` : profile.id);
+
+/**
  * Capacidade: quantas magias as classes permitem conhecer e quantas a ficha já tem.
- * Magias vindas de poderes/raça também estão na ficha, então o número é uma referência.
+ * Magias de raça e de ganhos extras de poderes ficam fora da conta.
  */
 export function learningCapacity(profiles, knownSpells) {
   const allowed = profiles.reduce((s, p) => s + p.known, 0);
   // Magias copiadas com Escriba Arcano não ocupam as escolhas de nível.
   const extra = knownSpells.filter(s => s.learnedBy === 'escriba').length;
   const borrowed = knownSpells.filter(s => s.learnedBy === 'usurpar').length; // magias usurpadas não são aprendidas
-  const current = knownSpells.length - extra - borrowed;
+  const other = knownSpells.filter(s => NOT_CLASS_SPELL.has(s.learnedBy)).length;
+  const current = knownSpells.length - extra - borrowed - other;
   const necro = profiles.find(p => p.necromancer);
   const necroCount = knownSpells.filter(s => s.school === 'nec').length;
   return { allowed, current, extra, remaining: allowed - current, necro: necro ? { count: necroCount, total: current } : null };

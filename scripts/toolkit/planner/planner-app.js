@@ -315,6 +315,7 @@ export class PlannerApp extends ApplicationV2 {
       if (!doc) return;
       const data = game.items.fromCompendium(doc);
       foundry.utils.setProperty(data, `flags.${MODULE_ID}.extraGain`, true);
+      if (doc.type === 'magia') foundry.utils.setProperty(data, `flags.${MODULE_ID}.learnedBy`, 'poder'); // não é magia de classe
       // Poder de outra classe dado por um poder da ficha (Cavaleiro Sagrado, Diferentão...): guarda a fonte.
       const def = x.type === 'classe' && x.via ? CROSS_CLASS_SOURCES[x.via] : null;
       if (def) foundry.utils.setProperty(data, `flags.${MODULE_ID}.via`, viaFlag(def, { subtipo: doc.system?.subtipo }));
