@@ -11,7 +11,10 @@
 const MAGO_SOURCES = new Set([null, undefined, '', 'arcanista', 'escriba']);
 
 /** É magia do Mago? `learnedBy` vem de flags['t20-toolkit'].learnedBy. */
-export const isMagoSpell = (type, learnedBy) => (type === 'arc' || type === 'uni') && MAGO_SOURCES.has(learnedBy);
+export const isMagoSpell = (type, learnedBy) =>
+  ((type === 'arc' || type === 'uni') && MAGO_SOURCES.has(learnedBy))
+  // Divinas aprendidas como Arcanista (Teurgista Místico, Linhagem Abençoada...) também são magias do Mago.
+  || (type === 'div' && (learnedBy === 'arcanista' || learnedBy === 'escriba'));
 
 /**
  * Magias que entram na conta do Mago: arcanas e universais aprendidas como Arcanista (ou copiadas).

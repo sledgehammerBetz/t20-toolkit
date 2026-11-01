@@ -800,7 +800,7 @@ export async function applyCreation(app) {
       itemsTitle: 'Adicionado à ficha', items: created.map(id => actor.items.get(id)).filter(Boolean).map(d => ({ name: d.name, img: d.img })),
       note: [raceNotes.length ? `Escolhas da raça: ${raceNotes.join('; ')}.` : '', age.levels ? `Começa com ${age.levels} nível(is) a mais: suba-os no Planejador.` : '', notes.length ? `Itens de origem para combinar com o mestre: ${notes.join('; ')}` : ''].filter(Boolean).join(' ')
     });
-    if (gainsAt(cls?.name ?? '', 1).gains.some(g => g.kind === 'spells')) game.t20Toolkit?.buscador?.open({ actor });
+    if (gainsAt(cls?.name ?? '', 1).gains.some(g => g.kind === 'spells')) game.t20Toolkit?.buscador?.open({ actor, closeWhenDone: true });
   } catch (error) {
     console.error('[T20 Toolkit] Criação:', error);
     ui.notifications.error(`Não foi possível criar o personagem: ${error.message}. O que já foi aplicado continua na ficha.`);

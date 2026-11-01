@@ -11,8 +11,8 @@ import { escapeHtml, fold, actorClasses, actorSpells, arcanistPaths } from '../c
 import { toolFrame, onNavigate, onTheme, reopen } from '../ui/frame.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { TOOLKIT_FEATURES } from '../features.js';
-import { buildCasterProfiles, learningCapacity } from '../core/caster-rules.js';
-import { crossClassExtra } from '../core/caster-context.js';
+import { buildCasterProfiles, learningCapacity, applySpellPowers } from '../core/caster-rules.js';
+import { crossClassExtra, spellPowers } from '../core/caster-context.js';
 import { buildTimeline, gainsAt } from '../planner/planner-rules.js';
 import { getTableRules, retrainStatus } from '../core/table-rules.js';
 import { engenhocaState, isEngenhoca, isInventorClass } from '../engenhocas/engenhocas-rules.js';
@@ -55,13 +55,13 @@ export function homeSummary(actor, { rules = getTableRules(), isGM = false, day 
   if (extras.length) info.push({ tool: 'leveler', text: `${extras.length} ganho(s) fora da progressão registrado(s).` });
 
   // Magias
-  const profiles = buildCasterProfiles({ classes, arcanistPaths: arcanistPaths(actor), extra: crossClassExtra(actor, classes) });
   const known = actorSpells(actor);
+  const profiles = applySpellPowers(buildCasterProfiles({ classes, arcanistPaths: arcanistPaths(actor), extra: crossClassExtra(actor, classes) }), spellPowers(actor), known);
   const casters = profiles.filter(p => p.maxCircle > 0 && p.id !== 'usurpador');
   if (casters.length) {
     const cap = learningCapacity(casters, known);
     if (cap.remaining > 0) todo.push({ tone: 'warn', tool: 'buscador', text: `Pode aprender ${cap.remaining} magia(s) nova(s) (até ${Math.max(...casters.map(p => p.maxCircle))}º círculo).`, action: 'Escolher magias' });
-    else info.push({ tool: 'buscador', text: `${cap.current} magia(s) conhecida(s)${cap.extra ? ` + ${cap.extra} copiada(s)` : ''}.` });
+    else info.push({ tool: 'buscador', text: `${cap.current} magia(s) conhecida(s)${cap.extra ? ` (${cap.extra} copiada(s) com Escriba Arcano)` : ''}.` });
   }
 
   // Grimório (Mago)
