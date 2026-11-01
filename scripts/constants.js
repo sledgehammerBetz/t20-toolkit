@@ -1,5 +1,5 @@
 export const MODULE_ID = "t20-toolkit";
-export const MODULE_VERSION = "0.12.0-beta.1";
+export const MODULE_VERSION = "0.12.1-beta.1";
 export const ENGENHOCAS_ENGINE_VERSION = "0.43.0";
 
 export const FLAG_SCOPE = "tormenta20";

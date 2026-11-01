@@ -21,10 +21,12 @@ import { toolFrame, onNavigate, onTheme, reopen } from '../ui/frame.js';
 import { postCard } from '../ui/chat.js';
 import { disclosure } from '../ui/components.js';
 import { getTableRules } from '../core/table-rules.js';
-import { skillLabels } from './creation-view.js';
+import { skillLabels, actorHasSkill } from './creation-view.js';
+import { trainSkillsUpdate } from './skill-plan.js';
 import { applyCreation, rollCreationAttributes, undoCreation, stepCreationAttribute } from './creation-view.js';
 import { renderWizard, bindWizard, WIZARD_ACTIONS } from './creation-wizard.js';
-import { renderLevelEditor, bindLevelEditor, LEVEL_ACTIONS, renderExtraPage, aumentoAttr, intSkillGain } from './level-view.js';
+import { renderLevelEditor, bindLevelEditor, LEVEL_ACTIONS, renderExtraPage, aumentoAttr, intSkillGain, missingChoices } from './level-view.js';
+import { powerChoice, powerChoiceLabel } from './power-choices.js';
 import { renderDoneLevel, RETRAIN_ACTIONS } from './retrain-view.js';
 import { renderRetroLevel, renderRetroPage, bindRetro, looseItems, unrecordedLevels, RETRO_ACTIONS } from './retro-view.js';
 
@@ -113,7 +115,7 @@ export class PlannerApp extends ApplicationV2 {
     for (const row of c.timeline) {
       if (row.done || row.level >= level) continue;
       for (const key of c.plan[row.level]?.intSkills ?? []) {
-        const label = globalThis.CONFIG?.T20?.pericias?.[key]?.label ?? key;
+        const label = globalThis.CONFIG?.T20?.pericias?.[key]?.label ?? skillLabels()[key] ?? key;
         skills.add(norm(game.i18n?.localize?.(label) ?? label));
       }
     }
@@ -199,7 +201,8 @@ export class PlannerApp extends ApplicationV2 {
         const picks = c.plan[r.level]?.picks ?? {};
         const ig = intSkillGain(this, r.level);
         const missing = g.gains.some(x => ['power', 'path'].includes(x.kind) && !picks[x.id]) || ig.picks.length < ig.want
-          || viaSlots(this, r.level, r, c.plan[r.level]).some(x => !picks[x.id]);
+          || viaSlots(this, r.level, r, c.plan[r.level]).some(x => !picks[x.id])
+          || missingChoices(this, r.level, [...g.gains, ...viaSlots(this, r.level, r, c.plan[r.level])]).length > 0;
         status = missing ? 'missing' : 'ok';
       } else { title = 'Sem classe'; sub = r.level === c.current + 1 ? 'próximo nível' : 'sem plano'; status = r.level === c.current + 1 ? 'next' : 'empty'; }
       return `<li><button type="button" data-action="pickLevel" data-level="${r.level}" aria-current="${sel ? 'step' : 'false'}" data-state="${status}">
@@ -303,9 +306,11 @@ export class PlannerApp extends ApplicationV2 {
     let entry = null;
     const update = {};
     if (x.type === 'pericia') {
-      const label = skillLabels()[x.value] ?? x.value;
-      update[`system.pericias.${x.value}.treinado`] = true;
-      entry = { type: 'pericia', key: x.value, label };
+      const labels = skillLabels();
+      const label = labels[x.value] ?? x.value;
+      const tr = trainSkillsUpdate(actor.system?.pericias ?? {}, [x.value], labels);
+      Object.assign(update, tr.update);
+      entry = { type: 'pericia', key: tr.trained[0] ?? x.value, label, ...(tr.created.length ? { created: true } : {}) };
     } else if (x.type === 'atributo') {
       const cur = Number(actor.system?.atributos?.[x.value]?.base) || 0;
       update[`system.atributos.${x.value}.base`] = cur + 1;
@@ -316,17 +321,32 @@ export class PlannerApp extends ApplicationV2 {
       const data = game.items.fromCompendium(doc);
       foundry.utils.setProperty(data, `flags.${MODULE_ID}.extraGain`, true);
       if (doc.type === 'magia') foundry.utils.setProperty(data, `flags.${MODULE_ID}.learnedBy`, 'poder'); // não é magia de classe
+      // Escolha dentro do poder (Familiar → qual animal...): mesma regra da página do nível.
+      const spec = powerChoice(this.index.powerByUuid.get(x.value));
+      const choice = spec && x.sub ? { value: x.sub, label: powerChoiceLabel(spec, x.sub, this.index, skillLabels()) } : null;
+      if (choice) {
+        foundry.utils.setProperty(data, `flags.${MODULE_ID}.choice`, choice.value);
+        foundry.utils.setProperty(data, 'system.description.value', `<p><b>Escolha:</b> ${escapeHtml(choice.label)}</p>${foundry.utils.getProperty(data, 'system.description.value') ?? ''}`);
+      }
+      const variantDoc = choice && spec.kind === 'variant' ? await fromUuid(choice.value) : null;
+      let variantId = null;
+      if (variantDoc) {
+        const vd = game.items.fromCompendium(variantDoc);
+        foundry.utils.setProperty(vd, `flags.${MODULE_ID}.extraGain`, true);
+        [{ id: variantId }] = await actor.createEmbeddedDocuments('Item', [vd]);
+      }
       // Poder de outra classe dado por um poder da ficha (Cavaleiro Sagrado, Diferentão...): guarda a fonte.
       const def = x.type === 'classe' && x.via ? CROSS_CLASS_SOURCES[x.via] : null;
       if (def) foundry.utils.setProperty(data, `flags.${MODULE_ID}.via`, viaFlag(def, { subtipo: doc.system?.subtipo }));
       const [item] = await actor.createEmbeddedDocuments('Item', [data]);
-      entry = { type: x.type, itemId: item?.id, label: def ? `${doc.name} (por ${def.name})` : doc.name, img: doc.img };
+      const name = choice ? `${doc.name} (${choice.label})` : doc.name;
+      entry = { type: x.type, itemId: item?.id, ...(variantId ? { variantId } : {}), label: def ? `${name} (por ${def.name})` : name, img: doc.img };
     }
     entry = { ...entry, kindLabel: KIND[x.type], reason, level, by: game.user?.name ?? '' };
     const list = [...(actor.getFlag(MODULE_ID, 'extraGains') ?? []), entry];
     await actor.update({ ...update, [`flags.${MODULE_ID}.extraGains`]: list });
     await postCard(actor, { tool: 'planner', tone: 'success', title: 'Ganho fora da progressão', subtitle: `${actor.name} · ${KIND[x.type]}`, items: [{ name: entry.label, img: entry.img }], note: reason ? `Motivo: ${reason}` : '' });
-    this.extra = { type: x.type, value: '', reason: '' };
+    this.extra = { type: x.type, value: '', sub: '', reason: '' };
     this.render();
   }
 
@@ -343,9 +363,9 @@ export class PlannerApp extends ApplicationV2 {
       await Promise.all([item?.update({ [`flags.${MODULE_ID}.-=source`]: null, [`flags.${MODULE_ID}.-=extraGain`]: null }), actor.update(update)]);
       return this.render();
     }
-    if (g.type === 'pericia') update[`system.pericias.${g.key}.treinado`] = false;
+    if (g.type === 'pericia') update[g.created ? `system.pericias.-=${g.key}` : `system.pericias.${g.key}.treinado`] = g.created ? null : false;
     if (g.type === 'atributo') update[`system.atributos.${g.key}.base`] = (Number(actor.system?.atributos?.[g.key]?.base) || 0) - 1;
-    await Promise.all([g.itemId ? actor.items.get(g.itemId)?.delete() : null, actor.update(update)]);
+    await Promise.all([g.itemId ? actor.items.get(g.itemId)?.delete() : null, g.variantId ? actor.items.get(g.variantId)?.delete() : null, actor.update(update)]);
     this.render();
   }
 
@@ -365,6 +385,7 @@ export class PlannerApp extends ApplicationV2 {
     const missing = [...g.gains, ...slots].filter(x => (x.kind === 'power' || x.kind === 'path') && !entry.picks?.[x.id]).map(x => x.label);
     const ig = intSkillGain(this, level);
     if (ig.picks.length < ig.want) missing.push(`${ig.want - ig.picks.length} perícia(s) por Inteligência`);
+    missing.push(...missingChoices(this, level, [...g.gains, ...slots]));
     const summary = [];
     const ctx = this.prereqContext(level);
     // Poder de outra classe: nível efetivo da fonte (vaga extra) ou da Alma Livre (vaga normal).
@@ -410,34 +431,47 @@ export class PlannerApp extends ApplicationV2 {
         let uuid = null;
         if (gain.kind === 'ability' && !this.ownsPower(gain.item)) uuid = this.findAbility(row.cls, gain.item)?.uuid;
         if ((gain.kind === 'power' || gain.kind === 'path') && entry.picks?.[gain.id]) uuid = entry.picks[gain.id];
-        if (uuid) uuids.push({ uuid, via: viaOf[gain.id] ? viaFlag(viaOf[gain.id].def, viaOf[gain.id].p) : null });
+        if (!uuid) continue;
+        // Escolha dentro do poder (Familiar → qual animal, Foco em Arma → qual arma...)
+        const spec = gain.kind === 'power' ? powerChoice(this.index.powerByUuid.get(uuid)) : null;
+        const sub = spec ? entry.sub?.[gain.id] ?? '' : '';
+        const choice = sub ? { value: sub, label: powerChoiceLabel(spec, sub, this.index, skillLabels()) } : null;
+        uuids.push({ uuid, via: viaOf[gain.id] ? viaFlag(viaOf[gain.id].def, viaOf[gain.id].p) : null, choice });
+        if (choice && spec.kind === 'variant') uuids.push({ uuid: sub, via: null, choice: null });
       }
-      const toCreate = (await Promise.all(uuids.map(async u => [await fromUuid(u.uuid), u.via]))).filter(([doc]) => doc).map(([doc, via]) => {
+      const choiceName = d => { const v = d.flags?.[MODULE_ID]?.choice; return v ? `${d.name} (${uuids.find(u => u.choice?.value === v)?.choice?.label ?? v})` : d.name; };
+      const toCreate = (await Promise.all(uuids.map(async u => [await fromUuid(u.uuid), u]))).filter(([doc]) => doc).map(([doc, { via, choice }]) => {
         const data = game.items.fromCompendium(doc);
         foundry.utils.setProperty(data, `flags.${MODULE_ID}.plannerLevel`, level);
         if (via) foundry.utils.setProperty(data, `flags.${MODULE_ID}.via`, via);
+        if (choice) {
+          // O nome fica o do livro (pré-requisitos e outras ferramentas procuram por ele); a escolha vai na descrição.
+          foundry.utils.setProperty(data, `flags.${MODULE_ID}.choice`, choice.value);
+          const desc = foundry.utils.getProperty(data, 'system.description.value') ?? '';
+          foundry.utils.setProperty(data, 'system.description.value', `<p><b>Escolha:</b> ${escapeHtml(choice.label)}</p>${desc}`);
+        }
         return data;
       });
       if (toCreate.length) {
         const docs = await actor.createEmbeddedDocuments('Item', toCreate);
         created.push(...docs.map(d => d.id));
-        summary.push(...docs.map(d => d.name));
+        summary.push(...docs.map(choiceName));
       }
       // 3) Perícias novas pelo Aumento de Atributo (Inteligência)
-      const trained = ig.picks.filter(k => !actor.system?.pericias?.[k]?.treinado);
-      if (trained.length) {
-        const labels = skillLabels();
-        summary.push(...trained.map(k => `Treinado em ${labels[k] ?? k}`));
-      }
+      const labels = skillLabels();
+      const newSkills = ig.picks.filter(k => !actorHasSkill(actor, k, labels));
+      if (newSkills.length) summary.push(...newSkills.map(k => `Treinado em ${labels[k] ?? k}`));
+      const tr = trainSkillsUpdate(actor.system?.pericias ?? {}, newSkills, labels);
+      const trained = tr.trained;
       await actor.update({
-        ...Object.fromEntries(trained.map(k => [`system.pericias.${k}.treinado`, true])),
-        [`flags.${MODULE_ID}.history.${level}`]: { cls: row.cls, classLevel: row.classLevel, classId, classCreated, created, trained },
+        ...tr.update,
+        [`flags.${MODULE_ID}.history.${level}`]: { cls: row.cls, classLevel: row.classLevel, classId, classCreated, created, trained, customSkills: tr.created },
         [`flags.${MODULE_ID}.plan.levels.-=${level}`]: null
       });
       const createdDocs = created.map(id => actor.items.get(id)).filter(Boolean);
       await postCard(actor, {
         tool: 'planner', tone: 'success', title: `${level}º nível`, subtitle: `${actor.name} · ${row.cls} ${row.classLevel}`,
-        itemsTitle: 'Adicionado à ficha', items: [...createdDocs, ...trained.map(k => ({ name: `Treinado em ${skillLabels()[k] ?? k}` }))].map(d => ({ name: d.name, img: d.img })),
+        itemsTitle: 'Adicionado à ficha', items: [...createdDocs.map(d => ({ name: choiceName(d), img: d.img })), ...newSkills.map(k => ({ name: `Treinado em ${labels[k] ?? k}` }))],
         note: g.gains.some(x => x.kind === 'spells') ? 'Escolha as magias novas no Buscador.' : ''
       });
       this.selected = Math.min(level + 1, 20);
@@ -470,7 +504,7 @@ export class PlannerApp extends ApplicationV2 {
     await Promise.all([
       ids.length ? actor.deleteEmbeddedDocuments('Item', ids) : null,
       cls ? cls.update({ 'system.niveis': Math.max(1, (parseInt(cls.system.niveis) || 1) - 1) }) : null,
-      actor.update({ ...Object.fromEntries((h.trained ?? []).map(k => [`system.pericias.${k}.treinado`, false])), [`flags.${MODULE_ID}.history.-=${level}`]: null })
+      actor.update({ ...Object.fromEntries((h.trained ?? []).map(k => (h.customSkills ?? []).includes(k) ? [`system.pericias.-=${k}`, null] : [`system.pericias.${k}.treinado`, false])), [`flags.${MODULE_ID}.history.-=${level}`]: null })
     ]);
     this.selected = level;
   }
