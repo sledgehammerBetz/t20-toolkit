@@ -1,10 +1,11 @@
 /**
- * Aviso/bloqueio ao lançar magia não memorizada (Mago, JdA p. 36).
+ * Aviso/bloqueio ao lançar magia não memorizada (Mago, JdA p. 37).
  * O sistema 1.5.015 não tem hook antes de usar um item, então envolvemos Item#roll
  * da classe de documento do sistema. Configurável pelo mestre: desligado, avisar, bloquear.
  */
 import { MODULE_ID } from '../../constants.js';
 import { isMago } from './grimorio-state.js';
+import { isMagoSpell } from './grimorio-rules.js';
 import { escapeHtml } from '../core/t20.js';
 
 export const GUARD_SETTING = 'grimorioGuard';
@@ -22,7 +23,8 @@ export function registerCastingGuardSetting() {
 /** Precisa de verificação? Exportada para testes. */
 export function needsGuard(item, actor) {
   if (item?.type !== 'magia' || !actor || actor.type !== 'character') return false;
-  if (!['arc', 'uni'].includes(item.system?.tipo)) return false;
+  // Só magias do Mago: as de raça, poderes ou outra classe não precisam ser memorizadas.
+  if (!isMagoSpell(item.system?.tipo, item.flags?.[MODULE_ID]?.learnedBy ?? null)) return false;
   if (item.system?.preparada) return false;
   return isMago(actor);
 }

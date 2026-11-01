@@ -1,12 +1,24 @@
 /**
- * Regras do Grimório do Mago (JdA p. 36): estudar o grimório por 1 hora, uma vez por dia,
+ * Regras do Grimório do Mago (JdA p. 37): estudar o grimório por 1 hora, uma vez por dia,
  * e memorizar metade (para baixo) das magias que conhece. Só pode lançar magias memorizadas.
  * Funções puras — sem Foundry.
  */
 
-/** Magias que entram na conta do Mago: arcanas e universais (engenhocas ficam de fora). */
+/**
+ * Origens de magia que são do Mago: aprendidas como Arcanista ou copiadas com Escriba Arcano. Sem registro (magias
+ * adicionadas antes de o Toolkit marcar a origem) também entra.
+ */
+const MAGO_SOURCES = new Set([null, undefined, '', 'arcanista', 'escriba']);
+
+/** É magia do Mago? `learnedBy` vem de flags['t20-toolkit'].learnedBy. */
+export const isMagoSpell = (type, learnedBy) => (type === 'arc' || type === 'uni') && MAGO_SOURCES.has(learnedBy);
+
+/**
+ * Magias que entram na conta do Mago: arcanas e universais aprendidas como Arcanista (ou copiadas).
+ * Magias de raça, de poderes ou de outra classe não são magias do Mago e não entram (JdA p. 171).
+ */
 export function magoSpells(spells) {
-  return spells.filter(s => s.type === 'arc' || s.type === 'uni');
+  return spells.filter(s => isMagoSpell(s.type, s.learnedBy));
 }
 
 export function memorizationLimit(knownCount) {

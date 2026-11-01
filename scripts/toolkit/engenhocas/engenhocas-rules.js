@@ -3,7 +3,8 @@
  *
  * Fabricação: magia arcana ou divina; 1º círculo, 2º a partir do 6º nível de inventor e +1 círculo a cada 4 níveis.
  *   Preço T$ 100 × PM da magia. Teste de Ofício (engenhoqueiro) CD 20 + PM.
- * Limite: Inteligência (+3 com Manutenção Eficiente, que também reduz o espaço para 0,5).
+ * Limite: Inteligência (+3 com Manutenção Eficiente, que também reduz o espaço para 0,5). Duas engenhocas com Ligação
+ *   de Convergência contam como uma. Engenhocaria Goblinoide: metade do preço, 1 dia, sem escolher 0, 10 ou 20 na ativação.
  * Item: Minúsculo, 1 espaço, Defesa 15, PV = metade dos PV do fabricante, RD 5; empunhada ou vestida.
  * Nível de inventor: soma o Inventor e a variante Alquimista (Heróis de Arton p. 21: variante e classe básica são a mesma
  *   classe, com a mesma lista de poderes e os mesmos pré-requisitos). Engenhoqueiro pego por poder de outra classe usa o
@@ -45,7 +46,7 @@ export const APARATOS = Object.freeze([
   { id: 'estimulador-sobrecarga', label: 'Estimulador de Sobrecarga', price: 750, text: '+1 dado no dano da engenhoca.' },
   { id: 'gatilho-corda', label: 'Gatilho de Corda', price: 1500, text: 'Engenhocas de ação padrão: ativa com ação de movimento; depois, ação completa para dar corda.' },
   { id: 'giroscopio', label: 'Giroscópio', price: 450, text: 'Ignora a penalidade de armadura nos testes de ativação.', auto: true },
-  { id: 'ligacao-convergencia', label: 'Ligação de Convergência', price: 300, text: 'Acoplado a exatamente duas engenhocas.', targets: 2 },
+  { id: 'ligacao-convergencia', label: 'Ligação de Convergência', price: 300, text: 'Acoplado a exatamente duas engenhocas, que contam como uma no limite. Depois de ativar uma, a outra não pode ser ativada na mesma cena.', targets: 2 },
   { id: 'remontagem-portabilidade', label: 'Remontagem de Portabilidade', price: 300, text: 'A engenhoca não ocupa espaço e conta como vestida. Só uma por vez.' },
   { id: 'sequenciador-ativacao', label: 'Sequenciador de Ativação', price: 600, text: 'Acoplado a exatamente três engenhocas, numa ordem definida.', targets: 3 },
   { id: 'sistema-refrigeracao', label: 'Sistema de Refrigeração', price: 900, text: 'Uma vez por dia: ação completa e 1 PM para reduzir em 5 a CD de ativação.', auto: true },
@@ -90,6 +91,27 @@ export const craftPrice = (pm, { goblinoide = false } = {}) => Math.floor(100 * 
 /** Limite de engenhocas: Inteligência (+3 com Manutenção Eficiente). Mínimo 0. */
 export const engenhocaLimit = (int, { manutencao = false } = {}) => Math.max(0, (Number(int) || 0) + (manutencao ? 3 : 0));
 
+/**
+ * Quantas engenhocas contam no limite: as duas unidas por uma Ligação de Convergência contam como uma (HdA p. 236).
+ * `items`: engenhocas da ficha.
+ */
+export function limitCount(items = []) {
+  const seen = new Set();
+  let n = 0;
+  for (const item of items) {
+    const group = engenhocaState(item).groups?.['ligacao-convergencia'];
+    if (group) {
+      if (seen.has(group)) continue;
+      seen.add(group);
+    }
+    n += 1;
+  }
+  return n;
+}
+
+/** Tempo de fabricação: uma semana, ou 1 dia com Engenhocaria Goblinoide (HdA p. 158). */
+export const craftTime = ({ goblinoide = false } = {}) => (goblinoide ? '1 dia' : '1 semana');
+
 /** Tipos de magia que viram engenhoca. */
 export const CRAFTABLE_TYPES = Object.freeze(['arc', 'div', 'uni']);
 
@@ -110,7 +132,7 @@ export function craftCheck(spell, { inventorLevel = 0, goblinoide = false, owned
 }
 
 /** Dados do item `equipamento` da engenhoca (formato v2, compatível com as engenhocas antigas). */
-export function buildEngenhocaItem({ spell, name, mode = 'hand', makerMaxPV = 0, manutencao = false, inventorLevel = 0, price = 0, userId = '', actorId = '', now = Date.now() }) {
+export function buildEngenhocaItem({ spell, name, mode = 'hand', makerMaxPV = 0, manutencao = false, goblinoide = false, inventorLevel = 0, price = 0, userId = '', actorId = '', now = Date.now() }) {
   const s = spell.system ?? {};
   const circle = Number(s.circulo) || 1;
   const pm = pmOf(circle);
@@ -146,7 +168,7 @@ export function buildEngenhocaItem({ spell, name, mode = 'hand', makerMaxPV = 0,
           sourceUuid: spell.uuid ?? '', sourceName: spell.name, spellSnapshot: snapshot,
           baseCost: pm, circle, spellType: s.tipo ?? '', school: s.escola ?? '', execution: s.ativacao?.execucao ?? '',
           range: s.alcance ?? '', resistance: s.resistencia?.txt ?? '', mode,
-          craftDC: craftDC(pm), activationBaseDC: 15 + pm, craftPrice: price, craftTime: '1 semana',
+          craftDC: craftDC(pm), activationBaseDC: 15 + pm, craftPrice: price, craftTime: craftTime({ goblinoide }),
           physical: { size: 'Minúsculo', baseSpaces: 1, effectiveSpaces: spaces, defense: 15, pv, rd: 5, manufacturerMaxPVAtCreation: makerMaxPV },
           inventorLevelAtCreation: inventorLevel, circleLimitAtCreation: maxCircle(inventorLevel),
           jammed: false, usesToday: 0, dayKey: null, aparatos: [],

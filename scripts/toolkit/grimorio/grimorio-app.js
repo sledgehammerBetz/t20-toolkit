@@ -78,13 +78,13 @@ export class GrimorioApp extends ApplicationV2 {
     const c = this.ctxData;
     const notes = [];
     if (!c.mago) notes.push(`<p class="t20tk-bz-warn">O Grimório segue a regra do Arcanista <b>Mago</b>. Adicione o poder "Caminho do Arcanista: Mago" à ficha. ${game.user.isGM ? 'Como mestre, você ainda pode usar esta janela.' : ''}</p>`);
-    if (!c.known.length) notes.push(`<p class="t20tk-bz-warn">Nenhuma magia arcana na ficha. <button type="button" class="t20tk-bz-link" data-action="openBuscador">Abrir o Buscador de Magias</button></p>`);
+    if (!c.known.length) notes.push(`<p class="t20tk-bz-warn">Nenhuma magia arcana de Arcanista na ficha. <button type="button" class="t20tk-bz-link" data-action="openBuscador">Abrir o Buscador de Magias</button></p>`);
     const last = c.data.lastStudyDay
       ? (c.studiedToday ? '<b>Já estudou hoje.</b> Nova memorização só amanhã (no relógio do mundo).' : 'Pode estudar hoje.')
       : 'Ainda não estudou o grimório.';
     const status = `<section class="t20tk-bz-profiles">
       <div class="t20tk-bz-profile">
-        <div class="t20tk-bz-profile-head"><strong>Memorização diária</strong> <span>JdA p. 36</span></div>
+        <div class="t20tk-bz-profile-head"><strong>Memorização diária</strong> <span>JdA p. 37</span></div>
         <div class="t20tk-bz-facts">
           <span>Conhece <b>${c.known.length}</b> magias arcanas</span>
           <span>Pode memorizar <b>${c.limit}</b></span>
@@ -122,7 +122,7 @@ export class GrimorioApp extends ApplicationV2 {
       return `<li class="t20tk-gr-group" ${visible ? '' : 'hidden'}><h4>${circle ? `${circle}º círculo` : 'Círculo não identificado'}</h4><ol class="t20tk-gr-list">${rows}</ol></li>`;
     }).join('');
     const other = c.other.length
-      ? `<li class="t20tk-gr-group"><h4>Não entram na memorização</h4><p class="t20tk-bz-note">${c.other.map(s => escapeHtml(s.name)).join(', ')} (magias divinas de outra classe).</p></li>` : '';
+      ? `<li class="t20tk-gr-group"><h4>Não entram na memorização</h4><p class="t20tk-bz-note">${c.other.map(s => escapeHtml(s.name)).join(', ')} (magias divinas, de raça, de poderes ou de outra classe).</p></li>` : '';
 
     const gm = game.user.isGM;
     const footer = `<footer class="t20tk-gr-footer">

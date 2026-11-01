@@ -15,7 +15,7 @@ import { toolFrame, onNavigate, onTheme } from '../ui/frame.js';
 import { metric, pill } from '../ui/components.js';
 import { APARATOS, APARATO_BY_ID, CRAFTABLE_TYPES, craftCheck, activationDC, aparatoBlocker, engenhocaState } from './engenhocas-rules.js';
 import { actorInventor, actorEngenhocas, craftEngenhoca, activateEngenhoca, repairEngenhoca, newDay, newScene, dismantleEngenhoca, installAparato, removeAparato, couplingArmors, automatoUsed, coupleEngenhoca, uncoupleEngenhoca, syncEngenhocas, activationSubstitutes } from './engenhocas-actions.js';
-import { COUPLE_PRICE, coupleBlocker, engenhocaExecution, effectReminders, engenhocaFlags } from './engenhocas-rules.js';
+import { COUPLE_PRICE, coupleBlocker, engenhocaExecution, effectReminders, engenhocaFlags, limitCount, craftTime } from './engenhocas-rules.js';
 
 const ApplicationV2 = globalThis.foundry?.applications?.api?.ApplicationV2 ?? class {};
 
@@ -88,7 +88,7 @@ export class EngenhocasApp extends ApplicationV2 {
     const res = filterSpells(craftable, this.sf);
     this.filterError = res.error || res.warning;
     return res.results.filter(({ spell }) => !(this.ui.hideMade && made.has(spell.key)))
-      .map(({ spell, via }) => ({ spell, via, check: craftCheck(spell, { inventorLevel: inv?.level ?? 0, goblinoide: inv?.goblinoide, owned: this.items().length, limit: inv?.limit ?? 0 }), made: made.has(spell.key) }));
+      .map(({ spell, via }) => ({ spell, via, check: craftCheck(spell, { inventorLevel: inv?.level ?? 0, goblinoide: inv?.goblinoide, owned: limitCount(this.items()), limit: inv?.limit ?? 0 }), made: made.has(spell.key) }));
   }
 
   /* ---------- render ---------- */
@@ -145,7 +145,7 @@ export class EngenhocasApp extends ApplicationV2 {
     if (!inv.level) warns.push('A ficha não tem nível de inventor.');
     if (!inv.engenhoqueiro) warns.push('Falta o poder Engenhoqueiro.');
     if (!inv.skillTrained && !activationSubstitutes(this.actor).length) warns.push('Ofício (engenhoqueiro) não está treinado.');
-    const n = this.items().length;
+    const n = limitCount(this.items());
     const pm = this.actor.system?.attributes?.pm ?? {};
     const powers = [['chutes', 'Chutes e Palavrões'], ['potente', 'Invenção Potente'], ['maestria', 'Maestria em Perícia'], ['manutencao', 'Manutenção Eficiente'], ['personalizado', 'Aparato Personalizado'], ['mecanizada', 'Armadura Mecanizada'], ['avancada', 'Armadura Avançada'], ['automatoEng', 'Autômato Engenhocado'], ['calibrar', 'Forçar a Calibragem'], ['rapida', 'Ativação Rápida'], ['goblinoide', 'Engenhocaria Goblinoide']].filter(([k]) => inv[k]).map(([, l]) => l)
     for (const sub of activationSubstitutes(this.actor)) if (!powers.includes(sub.source)) powers.push(`${sub.source} (usa ${sub.label} para fabricar e ativar)`);
@@ -311,7 +311,7 @@ export class EngenhocasApp extends ApplicationV2 {
     if (d.error) return `<p class="t20tk-bz-warn">${escapeHtml(d.error)}</p>`;
     const s = d.system;
     const inv = this.inv();
-    const check = craftCheck({ circle: Number(s.circulo), type: s.tipo }, { inventorLevel: inv?.level ?? 0, goblinoide: inv?.goblinoide, owned: this.items().length, limit: inv?.limit ?? 0 });
+    const check = craftCheck({ circle: Number(s.circulo), type: s.tipo }, { inventorLevel: inv?.level ?? 0, goblinoide: inv?.goblinoide, owned: limitCount(this.items()), limit: inv?.limit ?? 0 });
     const pv = Math.floor((inv?.maxPV ?? 0) / 2);
     const name = this.ui.name || `${d.name} (engenhoca)`;
     const canCraft = this.actor?.isOwner && (check.ok || game.user.isGM);
@@ -332,7 +332,7 @@ export class EngenhocasApp extends ApplicationV2 {
         <div class="t20tk-pills">${pill(`${Number(s.circulo)}º círculo`)}${pill(`${check.pm} PM`)}${pill(SPELL_TYPES[s.tipo] ?? s.tipo)}${pill(SPELL_SCHOOLS[s.escola] ?? s.escola)}</div>
       </div></div>
       ${form}
-      <div class="t20tk-metrics">${metric('Preço', `T$ ${check.price}`)}${metric('CD fabricar', String(check.dc))}${metric('CD ativar', String(15 + check.pm))}${metric('PV do item', String(pv))}${metric('Espaço', inv?.manutencao ? '0,5' : '1')}${metric('Execução', t20Label('abilityActivationTypes', engenhocaExecution(s.ativacao?.execucao)))}${metric('Tempo', '1 semana')}</div>
+      <div class="t20tk-metrics">${metric('Preço', `T$ ${check.price}`)}${metric('CD fabricar', String(check.dc))}${metric('CD ativar', String(15 + check.pm))}${metric('PV do item', String(pv))}${metric('Espaço', inv?.manutencao ? '0,5' : '1')}${metric('Execução', t20Label('abilityActivationTypes', engenhocaExecution(s.ativacao?.execucao)))}${metric('Tempo', craftTime({ goblinoide: inv?.goblinoide }))}</div>
       <details class="t20tk-disclosure" data-key="efeito"><summary>Descrição da magia</summary><div class="t20tk-disclosure-body t20tk-bz-description">${d.html}</div></details>
       <details class="t20tk-disclosure" data-key="aprimoramentos"><summary>Aprimoramentos <span class="t20tk-count">${d.enhancements.length}</span></summary><div class="t20tk-disclosure-body">${d.enhancements.length ? `<div class="t20tk-enh">${d.enhancements.map(e => `<div class="t20tk-enh-row"><span class="t20tk-enh-cost">${e.cost ? `+${escapeHtml(e.cost)} PM` : 'Especial'}</span><div>${escapeHtml(e.text)}</div></div>`).join('')}</div><p class="t20tk-bz-note">Na ativação, cada PM de aprimoramento soma +1 na CD.</p>` : '<p class="t20tk-bz-note">Sem aprimoramentos.</p>'}</div></details>`;
   }

@@ -8,7 +8,7 @@ import { enrichDescription } from '../ui/enrich.js';
 import { replaceKeepingPlace } from '../ui/render.js';
 import { MODULE_ID } from '../../constants.js';
 import { SPELL_TYPES, SPELL_SCHOOLS, CIRCLES, fold, escapeHtml, actorClasses, arcanistPaths, actorSpells, actorPowers } from '../core/t20.js';
-import { buildCasterProfiles, evaluateSpell, learningCapacity, necromancerRatioOk, CASTER_CLASSES } from '../core/caster-rules.js';
+import { buildCasterProfiles, evaluateSpell, learningCapacity, necromancerRatioOk, learnedByFor, CASTER_CLASSES } from '../core/caster-rules.js';
 import { getSpellCatalog } from '../core/spells/spell-catalog.js';
 import { readSchools, casterContext } from '../core/caster-context.js';
 import { refreshCompendiumIndex } from '../core/spell-index.js';
@@ -195,7 +195,7 @@ export class BuscadorApp extends ApplicationV2 {
     return `<details class="t20tk-disclosure t20tk-profile-box" data-region="profile" ${open ? 'open' : ''}>
       <summary><span class="t20tk-profile-sum"><b>${summary}</b><span class="t20tk-bz-capacity ${capClass}">${capText}</span></span></summary>
       <div class="t20tk-disclosure-body"><section class="t20tk-bz-profiles">${cards}${this.#renderDuploPicker()}
-        <div class="t20tk-bz-capacity ${capClass}">${extraText ? extraText.replace(/^ · /, '') + ' · ' : ''}<small>Magias ganhas por poderes ou raça também contam aqui; o mestre decide nesses casos.</small></div>
+        <div class="t20tk-bz-capacity ${capClass}">${extraText ? extraText.replace(/^ · /, '') + ' · ' : ''}<small>Magias de raça e de ganhos extras de poderes não contam aqui.</small></div>
       </section></div>
     </details>`;
   }
@@ -355,6 +355,11 @@ export class BuscadorApp extends ApplicationV2 {
       const doc = await fromUuid(uuid);
       if (!doc) throw new Error('Magia não encontrada no compêndio.');
       const data = game.items.fromCompendium(doc);
+      // Guarda a classe com que a magia foi aprendida (JdA p. 171): o Grimório só conta as do Arcanista.
+      const by = row.by ?? [];
+      const at = Math.max(by.findIndex(r => r.status === 'allowed'), by.length === 1 ? 0 : -1);
+      const learnedBy = at >= 0 ? learnedByFor(this.ctx.profiles[at]) : null;
+      if (learnedBy) foundry.utils.setProperty(data, `flags.${MODULE_ID}.learnedBy`, learnedBy);
       const [created] = await actor.createEmbeddedDocuments('Item', [data]);
       ui.notifications.info(`${created?.name ?? row.spell.name} adicionada a ${actor.name}.`);
     } catch (error) {

@@ -90,7 +90,8 @@ export function homeSummary(actor, { rules = getTableRules(), isGM = false, day 
   // Alquimista (variante) só entra com o poder Engenhoqueiro: a variante não se dedica a engenhocas.
   // Engenhoqueiro pego por poder de outra classe (Alma Livre, Diferentão...) também conta.
   const engenhoqueiro = items.find(i => i.type === 'poder' && fold(i.name) === 'engenhoqueiro');
-  const inventor = classes.some(c => c.key === 'inventor') || (!!engenhoqueiro && (classes.some(c => isInventorClass(c.name)) || !!engenhoqueiro.flags?.[MODULE_ID]?.via));
+  // Sem o poder Engenhoqueiro não se fabrica engenhoca (JdA p. 68), nem sendo Inventor.
+  const inventor = !!engenhoqueiro && (classes.some(c => isInventorClass(c.name)) || !!engenhoqueiro.flags?.[MODULE_ID]?.via);
   if (engs.length || inventor) {
     relevant.add('engenhocas');
     const jammed = engs.filter(i => { try { return engenhocaState(i).jammed; } catch { return false; } });
