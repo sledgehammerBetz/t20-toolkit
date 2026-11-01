@@ -11,6 +11,7 @@ import { MODULE_ID } from '../../constants.js';
 import { escapeHtml, actorClasses, plainText, fold } from '../core/t20.js';
 import { powerClassLevel } from '../core/class-levels.js';
 import { chatCard, chatFlavor, postCard } from '../ui/chat.js';
+import { enrichDescription } from '../ui/enrich.js';
 import { skillSubstitutes, textBonuses, testParts, fixedBonus, allFixed, testFormula, chanceOf, canChooseZero } from '../core/skill-test.js';
 import {
   FLAG_SCOPE, FLAG_KEY, SKILL_KEY, APARATO_BY_ID, ENGENHOCA_ITEM_TYPE, COUPLE_PRICE, isEngenhoca, engenhocaState, engenhocaFlags, inventorContext,
@@ -75,7 +76,8 @@ export async function craftEngenhoca(actor, { uuid, name = '', mode = 'hand', ro
 
   if (roll) {
     // Mesmo teste da ativação: perícia substituta (Artesão Criativo…), efeitos e bônus de poderes, escolher 10 / 0.
-    const choice = await confirmActivation(actor, null, { aparatos: [], coupled: null, mode }, inv, { spellPM: 0, powerPM: 0, powers: new Set(), ownFx: new Set(), craft: { dc: check.dc, pm: check.pm, title: `Fabricar ${finalName}` } });
+    const description = await enrichDescription(spell.system?.description?.value ?? '', spell);
+    const choice = await confirmActivation(actor, null, { aparatos: [], coupled: null, mode }, inv, { spellPM: 0, powerPM: 0, powers: new Set(), ownFx: new Set(), description, craft: { dc: check.dc, pm: check.pm, title: `Fabricar ${finalName}` } });
     if (!choice) return null;
     if (choice.cost.total > pmNow(actor)) return ui.notifications.warn(`PM insuficientes: o teste custa ${choice.cost.total} PM.`);
     const r = await rollActivation(actor, null, choice.test, check.dc, choice.take, `Fabricar ${finalName}`, ['sucesso', 'falha']);
@@ -134,6 +136,20 @@ const forItem = (ef, name) => {
   return !list.length || list.includes(name);
 };
 
+/**
+ * Valor que um efeito soma no teste, com os atributos da ficha (Engenhosidade soma "@int").
+ * Sem isso o "@int" ia cru para a rolagem e virava 0. Dados ("1d4") continuam como fórmula.
+ */
+function resolveBonus(value, data) {
+  const raw = String(value ?? '').trim();
+  const text = raw.includes('@') ? Roll.replaceFormulaData(raw, data, { missing: '0' }) : raw;
+  if (/^[+-]?\d+$/.test(text)) return Number(text);
+  if (/^[\d\s+\-*/().]+$/.test(text)) {
+    try { return Math.floor(Number(Roll.safeEval(text))) || 0; } catch { return text; }
+  }
+  return text;
+}
+
 /** Perícias da ficha: [{ key, label, value, pda }]. */
 function sheetSkills(actor) {
   return Object.entries(actor?.system?.pericias ?? {})
@@ -182,12 +198,16 @@ export function activationTest(actor, st, inv, c, { craft = false } = {}) {
   const effects = skillEffects(actor, skill.label);
   const texts = textBonuses(sheetPowers(actor, skill.key), skill.key === SKILL_KEY ? 'engenhoqueiro' : skill.label);
   const extras = [];
+  const data = actor?.getRollData?.() ?? {};
   let pmCost = 0;
   for (const ef of effects) {
     const qty = Number(c.fx?.[ef.id]) || 0;
     if (!qty) continue;
     pmCost += ef.cost * qty;
-    for (const v of ef.adds) extras.push({ label: ef.name, value: Number(v) ? Number(v) * qty : v });
+    for (const v of ef.adds) {
+      const value = resolveBonus(v, data);
+      extras.push({ label: ef.name, value: typeof value === 'number' ? value * qty : value });
+    }
   }
   for (const t of texts) if (c.text?.[t.id] && !t.onSheet) extras.push({ label: t.source, value: t.value });
   // Fabricar não sofre penalidade de armadura (só a ativação sofre): devolve o que a ficha descontou.
@@ -207,7 +227,7 @@ const chanceFor = (take, dc, bonus) => (take === 'zero' ? 100 : take === 'ten' ?
  * Diálogo da ativação: CD aberta, teste (perícia, efeitos, bônus de poderes), opções e custo.
  * `sys` = o que já veio da janela do sistema: { spellPM, powerPM, powers: Set, ownFx: Set de chaves com efeito na ficha }.
  * Fabricação usa o mesmo diálogo com `sys.craft` = { dc, pm, title }: sem opções de ativação e com escolher 10 livre
- * (fabricar não é situação de pressão). Devolve as escolhas ou null.
+ * (fabricar não é situação de pressão). `sys.description` = HTML da magia, mostrado acima do teste. Devolve as escolhas ou null.
  */
 async function confirmActivation(actor, item, st, inv, sys) {
   const craft = sys.craft ?? null;
@@ -283,7 +303,7 @@ async function confirmActivation(actor, item, st, inv, sys) {
   };
   const result = await DialogV2().wait({
     window: { title: craft ? craft.title : `Ativar ${item.name}` },
-    content: `<div class="t20tk-eng-confirm">${body()}</div>`,
+    content: `${spellDescription(sys.description)}<div class="t20tk-eng-confirm">${body()}</div>`,
     rejectClose: false,
     buttons: [
       { action: 'go', label: craft ? 'Fabricar' : 'Ativar', default: true, callback: () => ({ ...c, ...calc() }) },
@@ -299,13 +319,18 @@ async function confirmActivation(actor, item, st, inv, sys) {
   return result;
 }
 
+/** Descrição da magia nas janelas da ativação (fica fora da parte que redesenha a cada mudança). */
+const spellDescription = (html, open = false) => (html
+  ? `<details class="t20tk-disclosure t20tk-eng-desc" ${open ? 'open' : ''}><summary>Descrição da magia</summary><div class="t20tk-disclosure-body t20tk-bz-description">${html}</div></details>`
+  : '');
+
 /** Rola (ou escolhe 10 / 0) o teste e posta no chat. Devolve { total, natural, success }. */
 async function rollActivation(actor, item, test, dc, take, title = item.name, [ok, ko] = ['ativou', 'falhou']) {
   if (take === 'zero') {
     await postCard(actor, { tool: 'engenhocas', tone: 'success', title, subtitle: `escolheu 0: ${ok}`, rows: [['Resultado', `${test.bonus} (só o bônus)`], ['CD', String(dc)]], note: 'Sem rolar o d20: não há acerto crítico nem falha crítica.' });
     return { total: test.bonus, natural: null, success: true };
   }
-  const roll = await new Roll(take === 'ten' ? test.formula.replace(/^1d20/, '10') : test.formula).evaluate();
+  const roll = await new Roll(take === 'ten' ? test.formula.replace(/^1d20/, '10') : test.formula, actor.getRollData()).evaluate();
   const success = roll.total >= dc;
   await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: chatFlavor({ tool: 'engenhocas', title, result: `${test.skill.key === SKILL_KEY ? 'Ofício (engenhoqueiro)' : test.skill.label}${take === 'ten' ? ' (escolheu 10)' : ''} contra CD ${dc}: ${success ? ok : ko}`, tone: success ? 'success' : 'error' }) });
   return { total: roll.total, natural: take === 'ten' ? null : roll.dice?.[0]?.total, success };
@@ -354,7 +379,15 @@ export async function activateEngenhoca(item) {
   // 1) aprimoramentos da magia e efeitos de poderes (diálogo do sistema)
   const preview = buildPreview(actor, item, st, 0);
   preview.prepareFinalAttributes?.();
-  const configuration = await AbilityUseDialog.create(preview);
+  // A janela do sistema só lista os aprimoramentos: põe a descrição da magia em cima para ajudar a escolher.
+  const description = await enrichDescription(st.snapshot?.system?.description?.value ?? '', preview);
+  const hook = Hooks.on('renderAbilityUseDialog', (app, html) => {
+    const root = html?.[0] ?? html;
+    if (app.item !== preview || !description || root?.querySelector?.('.t20tk-eng-desc')) return;
+    (root.querySelector('form') ?? root.querySelector('.dialog-content') ?? root).insertAdjacentHTML('afterbegin', spellDescription(description, true));
+    app.setPosition?.({ height: 'auto' });
+  });
+  const configuration = await AbilityUseDialog.create(preview).finally(() => Hooks.off('renderAbilityUseDialog', hook));
   if (!configuration) return null;
   if (configuration.brew) return ui.notifications.warn('Engenhocas não fabricam poções: use o botão de usar.');
   const actorFx = [...(actor.effects ?? [])].map(e => ({ id: e.id, name: e.name, spell: !!(e.flags?.tormenta20?.onuse && e.flags?.tormenta20?.spell) }));
@@ -363,7 +396,7 @@ export async function activateEngenhoca(item) {
   if (split.spellPM > inv.int) return ui.notifications.warn(`Aprimoramentos custam ${split.spellPM} PM, mas o limite da engenhoca é ${inv.int} PM (Inteligência).`);
 
   // 2) teste, CD, opções e custo
-  const choice = await confirmActivation(actor, item, st, inv, { ...split, ownFx });
+  const choice = await confirmActivation(actor, item, st, inv, { ...split, ownFx, description });
   if (!choice) return null;
   const { dc, cost, test } = choice;
   if (cost.total > pmNow(actor)) return ui.notifications.warn(`PM insuficientes: a ativação custa ${cost.total} PM.`);
