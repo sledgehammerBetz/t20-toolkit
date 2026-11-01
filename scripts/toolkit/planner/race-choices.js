@@ -10,6 +10,8 @@
  *    attr         +1 em um atributo (soma nos modificadores raciais)
  *    note         escolha que não muda a ficha (vai no chat): resistência, arma natural, bônus em perícia…
  *    bonusOrPower +2 em uma perícia (nota) OU um poder (Lefou)
+ *    Vagas de nota/perícia da mesma habilidade nunca repetem valor ("duas perícias" = duas diferentes);
+ *    `abl` limita as perícias ao atributo-base (Esperteza Vulpina: Int ou Car).
  * 2) "Bancos" de habilidades da raça para escolher (Golem de Ameaças, Duende, Kallyanach, Mashin, Kobolds).
  */
 import { fold } from '../core/t20.js';
@@ -47,7 +49,7 @@ export const RACE_ABILITY_CHOICES = Object.freeze({
   'fonte elemental': { text: 'Espírito elemental: imunidade ao tipo escolhido.', slots: [{ kind: 'note', label: 'Elemento', options: ['água (frio)', 'ar (eletricidade)', 'fogo (fogo)', 'terra (ácido)'] }] },
   'elemental': { text: 'Espírito elemental: imunidade ao tipo escolhido.', slots: [{ kind: 'note', label: 'Elemento', options: ['água (frio)', 'ar (eletricidade)', 'fogo (fogo)', 'terra (ácido)'] }] },
   'armamento kallyanach': { text: 'Arma natural (1d6).', slots: [{ kind: 'note', label: 'Arma', options: ['cauda (impacto)', 'chifres (perfuração)', 'mordida (perfuração)'] }] },
-  'esperteza vulpina': { text: '+2 em duas perícias de Inteligência ou Carisma.', slots: [{ kind: 'note', label: '+2 em', skills: true }, { kind: 'note', label: '+2 em', skills: true }] },
+  'esperteza vulpina': { text: '+2 em duas perícias de Inteligência ou Carisma.', slots: [{ kind: 'note', label: '+2 em', skills: true, abl: ['int', 'car'] }, { kind: 'note', label: '+2 em', skills: true, abl: ['int', 'car'] }] },
   'heranca de deathok': { text: '+2 em duas perícias (pode trocar a cada manhã).', slots: [{ kind: 'note', label: '+2 em', skills: true }, { kind: 'note', label: '+2 em', skills: true }] },
   'heranca de ramknal': { text: 'Duas perícias entre Acrobacia, Enganação, Furtividade, Jogatina e Ladinagem (+5 por 2 PM).', slots: [{ kind: 'note', label: 'Perícia', options: ['Acrobacia', 'Enganação', 'Furtividade', 'Jogatina', 'Ladinagem'] }, { kind: 'note', label: 'Perícia', options: ['Acrobacia', 'Enganação', 'Furtividade', 'Jogatina', 'Ladinagem'] }] },
   'heranca de pelagia': { text: 'Três perícias para escolher 10 por 1 PM.', slots: [{ kind: 'note', label: 'Perícia', skills: true }, { kind: 'note', label: 'Perícia', skills: true }, { kind: 'note', label: 'Perícia', skills: true }] },
@@ -137,6 +139,21 @@ export function raceAttrBonus(choices, picks = {}) {
   return out;
 }
 
+/** Vaga cujo valor não pode repetir o de outra vaga da mesma habilidade (perícias, opções, +2 em perícia). */
+export const isDistinctSlot = s => s.kind === 'note' || s.kind === 'skillFrom' || s.kind === 'bonusOrPower' || s.kind === 'spell';
+
+/** Valores já usados nas outras vagas da mesma habilidade (para bloquear repetição). */
+export function siblingValues(choice, picks = {}, index) {
+  const out = new Set();
+  choice.slots.forEach((s, j) => {
+    if (j === index || !isDistinctSlot(s)) return;
+    const p = picks[choice.key]?.[j];
+    if (s.kind === 'bonusOrPower' && (p?.mode ?? 'skill') === 'power') return;
+    if (p?.value) out.add(p.value);
+  });
+  return out;
+}
+
 /** O que falta escolher (para a etapa ficar completa). */
 export function raceChoiceProblems(choices, picks = {}, pools = [], poolPicks = {}) {
   const out = [];
@@ -149,9 +166,9 @@ export function raceChoiceProblems(choices, picks = {}, pools = [], poolPicks = 
       const prev = picks[c.key]?.[i - 1]?.value;
       if (p.value && p.value === prev) { out.push(`${c.name}: atributos diferentes`); return; }
     }
-    if (s.kind === 'spell' && s.distinct) {
-      const prev = picks[c.key]?.[i - 1]?.value;
-      if (p.value && p.value === prev) { out.push(`${c.name}: magias diferentes`); return; }
+    if (isDistinctSlot(s) && p.value && !(s.kind === 'bonusOrPower' && p.mode === 'power')) {
+      const before = new Set(c.slots.slice(0, i).map((x, j) => isDistinctSlot(x) && !(x.kind === 'bonusOrPower' && picks[c.key]?.[j]?.mode === 'power') ? picks[c.key]?.[j]?.value : null).filter(Boolean));
+      if (before.has(p.value)) { out.push(`${c.name}: escolhas repetidas`); return; }
     }
     if (!p.value) out.push(c.name);
   });

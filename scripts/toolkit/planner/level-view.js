@@ -10,11 +10,12 @@ import { escapeHtml, fold, actorClasses, plainText } from '../core/t20.js';
 import { BASE_CLASSES, classInfo, gainsAt, evaluatePower, isRepeatable } from './planner-rules.js';
 import { CASTER_CLASSES } from '../core/caster-rules.js';
 import { getTableRules } from '../core/table-rules.js';
-import { skillLabels } from './creation-view.js';
+import { skillLabels, actorHasSkill } from './creation-view.js';
 import { intBonusSkills } from './creation-rules.js';
 import { RACE_POOLS, racePools } from './race-choices.js';
 import { CROSS_CLASS_SOURCES } from '../core/class-levels.js';
 import { viaSlots, viaPool, viaCtx, slotCtx, almaLivreOptions, almaLivreClass, sheetGrantSources } from './cross-class.js';
+import { powerChoice, powerChoiceOptions, isChoiceVariant } from './power-choices.js';
 
 const strip = html => plainText(html);
 const STATUS = { ok: ['✔', 'Cumpre'], missing: ['✘', 'Não cumpre'], review: ['?', 'Conferir'], none: ['', 'Sem pré-requisitos'] };
@@ -98,7 +99,7 @@ function renderIntSkills(app, level) {
   const other = plannedIntSkills(app, level);
   const chosen = new Set(g.picks);
   const full = chosen.size >= g.want;
-  const opts = Object.entries(labels).filter(([k]) => !app.actor.system?.pericias?.[k]?.treinado && !other.has(k)).sort((x, y) => x[1].localeCompare(y[1], 'pt-BR'));
+  const opts = Object.entries(labels).filter(([k]) => !actorHasSkill(app.actor, k, labels) && !other.has(k)).sort((x, y) => x[1].localeCompare(y[1], 'pt-BR'));
   return `<section class="t20tk-wz-box ${full ? 'is-done' : ''}"><header><b>Perícias por Inteligência</b><small>O Aumento de Atributo (Inteligência) dá ${g.want} perícia(s) treinada(s) nova(s) (${chosen.size}/${g.want}).</small></header>
     <ul class="t20tk-wz-skills">${opts.map(([k, l]) => `<li><button type="button" class="t20tk-wz-skill" data-state="${chosen.has(k) ? 'on' : full ? 'off' : ''}" data-action="lvIntSkill" data-value="${k}" ${full && !chosen.has(k) ? 'disabled' : ''}><b>${escapeHtml(l)}</b></button></li>`).join('')}</ul></section>`;
 }
@@ -133,6 +134,44 @@ function raceTalentInTier(app, level, skipGain, options) {
     }
   }
   return '';
+}
+
+/* ---------- escolha dentro do poder (Familiar, Foco em Arma...) ---------- */
+
+/** Escolhas já feitas para o mesmo poder (ficha e plano), fora a vaga `gainId` do nível `level`. */
+export function choiceTaken(app, power, level, gainId) {
+  const out = new Set();
+  for (const i of app.actor?.items ?? []) {
+    const v = i.type === 'poder' && fold(i.name) === power.key ? i.flags?.[MODULE_ID]?.choice : null;
+    if (v) out.add(v);
+  }
+  for (const [lv, e] of Object.entries(app.ctxData?.plan ?? {})) {
+    for (const [gid, u] of Object.entries(e?.picks ?? {})) {
+      if (Number(lv) === level && gid === gainId) continue;
+      if (app.index.powerByUuid.get(u)?.key === power.key && e?.sub?.[gid]) out.add(e.sub[gid]);
+    }
+  }
+  return out;
+}
+
+/** Vagas do nível com poder escolhido que ainda pedem a escolha interna: rótulos para "falta". */
+export function missingChoices(app, level, gains) {
+  const entry = app.ctxData?.plan?.[level] ?? {};
+  return gains.filter(g => g.kind === 'power').map(g => [g, app.index.powerByUuid.get(entry.picks?.[g.id])])
+    .filter(([g, p]) => p && powerChoice(p) && !entry.sub?.[g.id]).map(([, p]) => `${powerChoice(p).label} (${p.name})`);
+}
+
+function renderChoice(app, chosen, gainId, entry) {
+  const spec = powerChoice(chosen);
+  if (!spec) return '';
+  const cur = entry.sub?.[gainId] ?? '';
+  const taken = spec.distinct ? choiceTaken(app, chosen, app.selected, gainId) : new Set();
+  const opts = powerChoiceOptions(spec, app.index, skillLabels());
+  if (!opts.length) return `<p class="t20tk-bz-warn">${escapeHtml(spec.label)}: nenhuma opção nos compêndios ativos; anote na ficha.</p>`;
+  return `<div class="t20tk-wz-field t20tk-lv-choice"><span>${escapeHtml(spec.label)}${cur ? '' : ' <em class="t20tk-wz-missing">falta escolher</em>'}</span><div class="t20tk-wz-chips">${opts.map(o => {
+    const off = taken.has(o.value) && o.value !== cur;
+    return `<button type="button" class="t20tk-chip ${o.value === cur ? 'is-on' : ''}" data-action="lvSub" data-gain="${gainId}" data-value="${escapeHtml(o.value)}" ${off ? 'disabled title="já escolhido em outra cópia deste poder"' : ''}>${escapeHtml(o.label)}</button>`;
+  }).join('')}</div></div>`;
 }
 
 export const bf = app => (app.bf ??= { q: '', group: '', cat: '', eligible: true, hideOwned: true });
@@ -209,7 +248,7 @@ function renderGain(app, gain, row, entry, ctx) {
   if (gain.kind === 'power') {
     const chosen = picks[gain.id] ? app.index.powerByUuid.get(picks[gain.id]) : null;
     const body = chosen
-      ? `<ul class="t20tk-wz-list t20tk-lv-chosen">${powerCard(app, chosen, slotCtx(app, ctx, chosen, { via: gain.via, slotClass: gain.powerClass || row.cls }))}</ul>${physicalNote(app, chosen)}${chosen.tipo === 'distincao' ? '<p class="t20tk-bz-note">Distinção: só vale se o personagem foi admitido (combine com o mestre).</p>' : ''}`
+      ? `<ul class="t20tk-wz-list t20tk-lv-chosen">${powerCard(app, chosen, slotCtx(app, ctx, chosen, { via: gain.via, slotClass: gain.powerClass || row.cls }))}</ul>${renderChoice(app, chosen, gain.id, entry)}${physicalNote(app, chosen)}${chosen.tipo === 'distincao' ? '<p class="t20tk-bz-note">Distinção: só vale se o personagem foi admitido (combine com o mestre).</p>' : ''}`
       : '<p class="t20tk-lv-empty">Não escolhido</p>';
     return `<div class="t20tk-lv-slot ${chosen ? 'is-done' : ''}"><header><small>${escapeHtml(gain.label)}</small>
       <span>${chosen ? `<button type="button" class="t20tk-bz-link" data-action="lvUnpick" data-gain="${gain.id}">remover</button>` : ''}<button type="button" class="t20tk-ui-button ${chosen ? '' : 't20tk-ui-button--primary'}" data-action="lvBrowse" data-kind="power" data-gain="${gain.id}">${chosen ? 'Trocar…' : 'Escolher…'}</button></span></header>${body}</div>`;
@@ -288,6 +327,7 @@ function renderBrowser(app, row) {
       && (!f.cat || p.tipo !== 'geral' || catOf(p) === f.cat)
       && (!f.hideOwned || aumentoAttr(p.name) || isRepeatable(p.description) || !app.ownsPower(p.name))
       && !(fold(p.name) === 'aumento de atributo' && pool.some(x => aumentoAttr(x.name)))
+      && !isChoiceVariant(p, pool)
       && (!f.eligible || evaluatePower(p, ctxOf(p)).status !== 'missing'));
     title = b.kind === 'extra' ? (xvia ? `Poder de outra classe (${xvia.name})` : 'Ganho fora da progressão') : `${gain.label} — ${row.cls} ${row.classLevel}º`;
     const groups = b.kind === 'extra' || via ? '' : chipRow('Grupo', 'group', [['', 'Todos'], ['classe', `De ${gain.powerClass || row.cls}`], ['geral', 'Gerais'], ...(getTableRules().distinctions ? [['distincao', 'Distinções']] : []), ...(talents.options.length ? [['raca', talents.label]] : []), ...(alma.options.length ? [['alma', `Alma Livre (${alma.cls})`]] : [])], f.group);
@@ -357,7 +397,7 @@ export function renderExtraPage(app) {
     let pick;
     if (x.type === 'pericia') {
       const labels = skillLabels();
-      const opts = Object.entries(labels).filter(([k]) => !app.actor.system?.pericias?.[k]?.treinado).sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
+      const opts = Object.entries(labels).filter(([k]) => !actorHasSkill(app.actor, k, labels)).sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
       pick = `<ul class="t20tk-wz-skills">${opts.map(([k, l]) => `<li><button type="button" class="t20tk-wz-skill" data-state="${x.value === k ? 'on' : ''}" data-action="lvExtraValue" data-value="${k}"><b>${escapeHtml(l)}</b></button></li>`).join('')}</ul>`;
     } else if (x.type === 'atributo') {
       pick = `<div class="t20tk-xg-attrs">${['for', 'des', 'con', 'int', 'sab', 'car'].map(k => {
@@ -412,10 +452,20 @@ export const LEVEL_ACTIONS = {
   async lvPick(event, target) {
     const { gain, value } = target.dataset;
     this.browse = null;
-    await flag(this, `picks.${gain}`, value);
+    const base = `flags.${MODULE_ID}.plan.levels.${this.selected}`;
+    const same = this.ctxData.plan[this.selected]?.picks?.[gain] === value;
+    await draftUpdate(this, { [`${base}.picks.${gain}`]: value, ...(same ? {} : { [`${base}.sub.${gain}`]: null }) });
     this.render();
   },
-  async lvUnpick(event, target) { await flag(this, `picks.${target.dataset.gain}`, null); },
+  async lvUnpick(event, target) {
+    const base = `flags.${MODULE_ID}.plan.levels.${this.selected}`;
+    await draftUpdate(this, { [`${base}.picks.${target.dataset.gain}`]: null, [`${base}.sub.${target.dataset.gain}`]: null });
+  },
+  async lvSub(event, target) {
+    const { gain, value } = target.dataset;
+    const cur = this.ctxData.plan[this.selected]?.sub?.[gain];
+    await flag(this, `sub.${gain}`, cur === value ? null : value);
+  },
   async lvIntSkill(event, target) {
     const g = intSkillGain(this, this.selected);
     const cur = new Set(g.picks);

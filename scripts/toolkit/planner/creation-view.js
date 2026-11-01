@@ -25,11 +25,12 @@ import { buildCasterProfiles } from '../core/caster-rules.js';
 import { devotionCheck, mustBeDevout, grantedPowerCount } from '../core/gods.js';
 import { GRANTED_POWERS, POWER_ALIASES } from '../usurpador/usurpador-rules.js';
 import { raceAbilityChoices, racePools, raceSkillSlots, raceAttrBonus, raceChoiceProblems, powerGroupFilter } from './race-choices.js';
-import { skillPlan, keysForName } from './skill-plan.js';
+import { skillPlan, keysForName, withExtraCrafts, isExtraCraft, trainSkillsUpdate } from './skill-plan.js';
 import { getTableRules, ATTRIBUTE_METHODS, enabledMethods, convertRoll, rollToValue, valkariaScores, remapRacial, racialModifiers, ageEffects, ageRuleFor, allowedAgeRules, AGE_JDA, AGE_HEROIS, AGE_COMPLICATIONS, ageComplicationItem, addAttrs } from '../core/table-rules.js';
 
 const FLAG = `flags.${MODULE_ID}.plan.creation`;
 const CORE_CRAFTS = ['alfa', 'alqu', 'arme', 'arte', 'cozi', 'enge'];
+const craftKeys = labels => [...CORE_CRAFTS, ...Object.keys(labels).filter(isExtraCraft)];
 const KEY_BY_CLASS = { bardo: 'car', clerigo: 'sab', druida: 'sab', mistico: 'sab' };
 const PATH_KEY = { mago: 'int', bruxo: 'int', feiticeiro: 'car' };
 
@@ -40,7 +41,18 @@ export function skillLabels() {
     const label = typeof cfg.label === 'string' ? game.i18n.localize(cfg.label) : key;
     out[key] = label;
   }
-  return out;
+  return withExtraCrafts(out);
+}
+
+/** Atributo-base de uma perícia (Ofícios extras são de Inteligência). */
+export const skillAbl = key => (isExtraCraft(key) ? 'int' : globalThis.CONFIG?.T20?.pericias?.[key]?.abl ?? '');
+
+/** A ficha tem a perícia treinada? Ofícios extras: perícia personalizada com o mesmo rótulo. */
+export function actorHasSkill(actor, key, labels = skillLabels()) {
+  const per = actor?.system?.pericias ?? {};
+  if (!isExtraCraft(key)) return !!per[key]?.treinado;
+  const n = v => fold(v).replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return Object.values(per).some(sk => sk?.custom && sk.treinado && n(sk.label) === n(labels[key]));
 }
 
 export function readCreation(actor) {
@@ -421,7 +433,7 @@ export function renderOriginItems(idx, originName, S, P) {
 
 /** Ofício do livro básico para "Ofício" sem especificar (chips, não menu). */
 export function craftChips(name, current, labels) {
-  return chipField(name, CORE_CRAFTS.map(k => ({ value: k, label: (labels[k] ?? k).replace(/^Of[íi]cio:\s*/i, '') })), current);
+  return chipField(name, craftKeys(labels).map(k => ({ value: k, label: (labels[k] ?? k).replace(/^Of[íi]cio:\s*/i, '') })), current);
 }
 
 /** Raça e classe escolhidas na criação, no formato de devotionCheck. */
@@ -474,7 +486,7 @@ export function creationPrereqContext(idx, cr, rules = getTableRules(), info = r
   for (const u of info.race?.grants ?? []) { const p = idx.powerByUuid.get(u); if (p) powers.add(p.key); }
   const classes = sk.cls ? [{ name: sk.cls.name, level: 1 }] : [];
   return {
-    attributes: sk.finals, classLevels: sk.cls ? { [sk.cls.key]: 1 } : {}, ownClasses: classes.map(c => fold(c.name)), totalLevel: 1,
+    attributes: sk.finals, attributesPending: !cr.seen?.attributes, classLevels: sk.cls ? { [sk.cls.key]: 1 } : {}, ownClasses: classes.map(c => fold(c.name)), totalLevel: 1,
     powers, skills: new Set(sk.plan.tiles.filter(t => t.lockedBy || t.pickedBy).map(t => nm(t.label))),
     knownPowerNames: new Set(idx.powers.map(p => p.key)), race: info.race?.name ?? '',
     maxCircle: Math.max(0, ...buildCasterProfiles({ classes }).map(p => p.maxCircle))
@@ -728,13 +740,9 @@ export async function applyCreation(app) {
         else if (kind === 'generic' && S.choice) queueFrom(S.choice);
       }
     }
-    for (const k of trained) update[`system.pericias.${k}.treinado`] = true;
-    let n = 1;
-    for (const label of customs) {
-      while (actor.system?.pericias?.[`ofi${n}`]) n++;
-      update[`system.pericias.ofi${n}`] = { label, custom: true, atributo: 'int', st: true, treinado: true };
-      n++;
-    }
+    // Ofícios fora da lista do sistema (extras e de origem) viram perícias personalizadas ofiN.
+    const tr = trainSkillsUpdate(actor.system?.pericias ?? {}, [...trained], labels, customs);
+    Object.assign(update, tr.update);
     // 5) Origem, divindade e atributo-chave de magia
     const dvc = devotionContext(app, cr);
     const god = cr.god && devotionCheck({ god: cr.god, race: dvc.race, classes: dvc.classes, rules }).level !== 'block' ? cr.god : '';
@@ -785,7 +793,7 @@ export async function applyCreation(app) {
     const classItem = classSlot === null ? null : docs[slots.indexOf(classSlot)] ?? null;
     // 8) Atributos, perícias, origem, divindade e histórico para desfazer: uma gravação só
     Object.assign(update, {
-      [`flags.${MODULE_ID}.history.1`]: { cls: cls?.name ?? '', classId: classItem?.id ?? null, classCreated: true, created, creation: true, prev, trained: [...trained] },
+      [`flags.${MODULE_ID}.history.1`]: { cls: cls?.name ?? '', classId: classItem?.id ?? null, classCreated: true, created, creation: true, prev, trained: tr.trained, customSkills: tr.created },
       [`flags.${MODULE_ID}.creationRules`]: { ageRule: ageRuleFor(cr.ageRule, rules), age: ageRuleFor(cr.ageRule, rules) !== 'off' ? (cr.age || 'jovem') : null, noPhysicalIncrease: !!age.noPhysicalIncrease, extraLevels: age.levels || 0 },
       [`flags.${MODULE_ID}.plan.-=creation`]: null
     });
@@ -832,7 +840,9 @@ async function queueOriginItems(actor, idx, originName, S, queueFrom) {
 export async function undoCreation(actor, h, extra = {}) {
   const ids = (h.created ?? []).filter(id => actor.items.get(id));
   const upd = Object.fromEntries(ATTRS.map(a => [`system.atributos.${a}.base`, h.prev?.base?.[a] ?? 0]));
-  for (const k of h.trained ?? []) if (!(h.prev?.trained ?? []).includes(k)) upd[`system.pericias.${k}.treinado`] = false;
+  const createdSkills = new Set(h.customSkills ?? []);
+  for (const k of h.trained ?? []) if (!(h.prev?.trained ?? []).includes(k) && !createdSkills.has(k)) upd[`system.pericias.${k}.treinado`] = false;
+  for (const k of createdSkills) upd[`system.pericias.-=${k}`] = null;
   upd['system.detalhes.origem'] = h.prev?.origem ?? '';
   upd['system.detalhes.divindade'] = h.prev?.divindade ?? '';
   upd['system.attributes.conjuracao'] = h.prev?.conjuracao ?? '';

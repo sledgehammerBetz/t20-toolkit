@@ -14,7 +14,7 @@ import { GENERAL_CATS, catOf } from './level-view.js';
 import { devotionCheck, mustBeDevout, DEVOTEES, ALT_DEVOTIONS, altDevotionsFor, grantedPowerCount } from '../core/gods.js';
 import { GRANTED_POWERS, POWER_ALIASES } from '../usurpador/usurpador-rules.js';
 import { getTableRules, allowedAgeRules, remapRacial, racialModifiers } from '../core/table-rules.js';
-import { powerGroupFilter, spellSlotFilter } from './race-choices.js';
+import { powerGroupFilter, spellSlotFilter, siblingValues } from './race-choices.js';
 import { toggleSkill } from './skill-plan.js';
 import { getSpellIndex } from '../core/spell-index.js';
 import { CASTER_CLASSES } from '../core/caster-rules.js';
@@ -22,7 +22,7 @@ import {
   readCreation, raceInfo, creationSkills, creationIssues, ageFor, finalAttributes, originSlots, originSlot, slotPaths,
   otherAttributes, fxUuids, loadAttrEffects, creationPrereqContext, customPicks, customItems, chipField,
   devotionContext, renderAttributes, renderAge, renderOriginItems, craftChips, pickButton,
-  skillLabels, sign
+  skillLabels, skillAbl, sign
 } from './creation-view.js';
 
 const FLAG = `flags.${MODULE_ID}.plan.creation`;
@@ -37,9 +37,11 @@ function steps(app, cr, rules, info) {
     { id: 'race', label: 'Raça' },
     info.choices.length || info.pools.length ? { id: 'raceChoices', label: 'Escolhas da raça' } : null,
     allowedAgeRules(rules).length ? { id: 'age', label: 'Idade' } : null,
-    { id: 'attributes', label: 'Atributos' },
-    { id: 'origin', label: slots.length > 1 ? 'Origens' : 'Origem', skip: !slots.length },
+    // Conceito antes dos números: raça, classe e origem primeiro; assim os Atributos já mostram
+    // todos os bônus (raça, idade, origem) e quem distribui sabe o que a classe pede.
     { id: 'class', label: 'Classe' },
+    { id: 'origin', label: slots.length > 1 ? 'Origens' : 'Origem', skip: !slots.length },
+    { id: 'attributes', label: 'Atributos' },
     { id: 'skills', label: 'Perícias' },
     rules.complications ? { id: 'complication', label: 'Complicação' } : null,
     { id: 'god', label: 'Divindade' },
@@ -165,13 +167,15 @@ function stepRaceChoices(app, cr, rules, info) {
       const base = `data-ability="${c.key}" data-slot="${i}"`;
       const path = `raceChoices.${c.key}.${i}.value`;
       const powerSel = group => pickButton({ path, pool: group, title: `${c.name}: escolher poder`, item: idx.powerByUuid.get(p.value) });
-      const skillChips = list => chips('wzChoice', list.map(([k, l]) => ({ value: k, label: l })), p.value, base);
+      const used = siblingValues(c, picks, i);   // "duas perícias" = duas diferentes
+      const opt = (value, label) => ({ value, label, disabled: used.has(value) && p.value !== value });
+      const skillChips = list => chips('wzChoice', list.filter(([k]) => !slot.abl || slot.abl.includes(skillAbl(k))).map(([k, l]) => opt(k, l)), p.value, base);
       const mode = (a, b) => `<div class="t20tk-wz-seg">${[['skill', a], ['power', b]].map(([m, l]) => `<button type="button" data-action="wzChoiceMode" ${base} data-value="${m}" aria-pressed="${(p.mode ?? 'skill') === m}">${l}</button>`).join('')}</div>`;
       switch (slot.kind) {
         case 'skill': return `<div class="t20tk-wz-row"><span>Perícia ${i + 1}</span><small class="t20tk-bz-meta">escolha na etapa Perícias (vaga "Raça")</small></div>`;
         case 'skillFrom': {
           const opts = slot.from.flatMap(n => { const k = Object.entries(labels).filter(([key, l]) => fold(l).startsWith(fold(n))); return k.map(([key, l]) => ({ value: key, label: l })); });
-          return `<div class="t20tk-wz-row"><span>Perícia</span>${chips('wzChoice', opts, p.value, base)}</div>`;
+          return `<div class="t20tk-wz-row"><span>Perícia</span>${chips('wzChoice', opts.map(o => opt(o.value, o.label)), p.value, base)}</div>`;
         }
         case 'skillOrPower': return `<div class="t20tk-wz-row"><span>Vaga ${i + 1}</span>${mode('Perícia', 'Poder geral')}${(p.mode ?? 'skill') === 'power' ? powerSel(slot.power) : '<small class="t20tk-bz-meta">perícia na etapa Perícias</small>'}</div>`;
         case 'bonusOrPower': return `<div class="t20tk-wz-row"><span>Vaga ${i + 1}</span>${mode('+2 em perícia', 'Poder da Tormenta')}${(p.mode ?? 'skill') === 'power' ? powerSel(slot.power) : skillChips(Object.entries(labels))}</div>`;
@@ -183,7 +187,7 @@ function stepRaceChoices(app, cr, rules, info) {
         case 'attr': return `<div class="t20tk-wz-row"><span>+1 em atributo</span><small class="t20tk-bz-meta">escolha na etapa <b>Atributos</b> (entra direto no total)</small></div>`;
         case 'attrDyn': return `<div class="t20tk-wz-row"><span>+1 em atributo</span><small class="t20tk-bz-meta">já faz parte dos atributos à escolha da raça (etapa Atributos)</small></div>`;
         case 'note': {
-          if (slot.options) return `<div class="t20tk-wz-row"><span>${escapeHtml(slot.label)}</span>${chips('wzChoice', slot.options.map(o => ({ value: o, label: o })), p.value, base)}</div>`;
+          if (slot.options) return `<div class="t20tk-wz-row"><span>${escapeHtml(slot.label)}</span>${chips('wzChoice', slot.options.map(o => opt(o, o)), p.value, base)}</div>`;
           const opts = Object.entries(labels).filter(([, l]) => !slot.crafts || /^of[íi]cio/i.test(fold(l)));
           return `<div class="t20tk-wz-row"><span>${escapeHtml(slot.label)}</span>${skillChips(opts)}</div>`;
         }

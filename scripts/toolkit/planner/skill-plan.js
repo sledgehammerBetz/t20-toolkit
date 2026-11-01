@@ -8,6 +8,52 @@ import { skillKeyFor } from './creation-rules.js';
 
 export const isCraftLabel = label => /^of[íi]cio/i.test(fold(label));
 
+/**
+ * Ofícios citados em poderes e origens (sistema e Suplementos de Arton) que não estão entre os seis do sistema.
+ * Entram nas listas de perícia com chave "ofx_<nome>" e viram perícia personalizada (ofiN) ao gravar na ficha.
+ * Ex.: Escriba Arcano pede "treinado em Ofício (escriba)".
+ */
+export const EXTRA_CRAFTS = Object.freeze(['Barbeiro', 'Calígrafo', 'Carpinteiro', 'Coureiro', 'Escriba', 'Minerador', 'Pedreiro', 'Pescador', 'Serviçal', 'Tatuador']);
+export const EXTRA_CRAFT_PREFIX = 'ofx_';
+export const isExtraCraft = key => String(key ?? '').startsWith(EXTRA_CRAFT_PREFIX);
+const craftNorm = v => fold(v).replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+/** Rótulos do sistema + Ofícios extras (sem repetir um que o sistema ou a ficha já tenham). */
+export function withExtraCrafts(labels) {
+  const have = new Set(Object.values(labels).map(craftNorm));
+  const out = { ...labels };
+  for (const name of EXTRA_CRAFTS) {
+    const label = `Ofício: ${name}`;
+    if (!have.has(craftNorm(label))) out[`${EXTRA_CRAFT_PREFIX}${fold(name).replace(/[^a-z0-9]+/g, '')}`] = label;
+  }
+  return out;
+}
+
+/**
+ * Atualização da ficha para treinar `keys`. Chaves do sistema: só marca treinado.
+ * Ofícios extras e `customLabels`: reaproveita uma perícia personalizada com o mesmo rótulo ou cria ofiN.
+ * @returns {{update:object, trained:string[], created:string[]}} trained = chaves reais; created = ofiN novas
+ */
+export function trainSkillsUpdate(pericias = {}, keys = [], labels = {}, customLabels = []) {
+  const update = {};
+  const trained = [];
+  const created = [];
+  const taken = new Set(Object.keys(pericias));
+  const customs = [...keys.filter(isExtraCraft).map(k => labels[k]).filter(Boolean), ...customLabels];
+  for (const k of keys) if (!isExtraCraft(k)) { update[`system.pericias.${k}.treinado`] = true; trained.push(k); }
+  let n = 1;
+  for (const label of [...new Set(customs)]) {
+    const hit = Object.entries(pericias).find(([, sk]) => sk?.custom && craftNorm(sk.label) === craftNorm(label));
+    if (hit) { update[`system.pericias.${hit[0]}.treinado`] = true; trained.push(hit[0]); continue; }
+    while (taken.has(`ofi${n}`)) n++;
+    const key = `ofi${n}`;
+    taken.add(key);
+    update[`system.pericias.${key}`] = { label, custom: true, atributo: 'int', st: true, treinado: true };
+    trained.push(key); created.push(key);
+  }
+  return { update, trained, created };
+}
+
 /** Chaves de perícia para um nome do livro ("Ofício" sem especificar = todas as de Ofício). */
 export function keysForName(name, labels) {
   const r = skillKeyFor(name, labels);
