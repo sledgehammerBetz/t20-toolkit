@@ -4,9 +4,9 @@
  */
 import { escapeHtml } from '../core/t20.js';
 
-const ICONS = { planner: 'fa-route', buscador: 'fa-magnifying-glass', grimorio: 'fa-book', escriba: 'fa-feather', usurpador: 'fa-hand-sparkles', engenhocas: 'fa-gears', hub: 'fa-house' };
+const ICONS = { planner: 'fa-route', buscador: 'fa-magnifying-glass', grimorio: 'fa-book', escriba: 'fa-feather', usurpador: 'fa-hand-sparkles', engenhocas: 'fa-gears', fabricacao: 'fa-mortar-pestle', hub: 'fa-house' };
 const icon = tool => `<i class="fa-solid ${ICONS[tool] ?? 'fa-wand-sparkles'}" inert></i>`;
-const LABELS = { planner: 'Planejador', buscador: 'Buscador de Magias', grimorio: 'Grimório', escriba: 'Escriba Arcano', usurpador: 'Usurpador', engenhocas: 'Engenhocas', hub: 'T20 Toolkit' };
+const LABELS = { planner: 'Planejador', buscador: 'Buscador de Magias', grimorio: 'Grimório', escriba: 'Escriba Arcano', usurpador: 'Usurpador', engenhocas: 'Engenhocas', fabricacao: 'Fabricação', hub: 'T20 Toolkit' };
 
 /**
  * @param {object} o

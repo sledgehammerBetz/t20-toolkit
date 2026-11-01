@@ -8,10 +8,11 @@
  * Preferências do teste em flags['t20-toolkit'].engenhocasTeste = { skill, fx, text }.
  */
 import { MODULE_ID } from '../../constants.js';
-import { escapeHtml, actorClasses, plainText, fold } from '../core/t20.js';
+import { escapeHtml, actorClasses, fold } from '../core/t20.js';
 import { powerClassLevel } from '../core/class-levels.js';
 import { chatCard, chatFlavor, postCard } from '../ui/chat.js';
 import { enrichDescription } from '../ui/enrich.js';
+import { sheetSkills, sheetPowers } from '../core/sheet-skills.js';
 import { skillSubstitutes, textBonuses, testParts, fixedBonus, allFixed, testFormula, chanceOf, canChooseZero } from '../core/skill-test.js';
 import {
   FLAG_SCOPE, FLAG_KEY, SKILL_KEY, APARATO_BY_ID, ENGENHOCA_ITEM_TYPE, COUPLE_PRICE, isEngenhoca, engenhocaState, engenhocaFlags, inventorContext,
@@ -84,7 +85,9 @@ export async function craftEngenhoca(actor, { uuid, name = '', mode = 'hand', ro
     if (choice.cost.total) await actor.spendMana(choice.cost.total, 0, false);
     const ok = r.success;
     if (!ok) {
-      await postCard(actor, { tool: 'engenhocas', tone: 'error', title: 'Fabricação falhou', subtitle: finalName, rows: [['Teste', `${r.total} contra CD ${check.dc}`]], note: 'Nada foi descontado. Confira com o mestre se houve perda de material.' });
+      // Regra da mesa (01/11/2026): custo é gasto qualquer que seja o resultado, salvo texto em contrário.
+      if (pay && check.price) await actor.update({ 'system.dinheiro.tp': money(actor) - check.price });
+      await postCard(actor, { tool: 'engenhocas', tone: 'error', title: 'Fabricação falhou', subtitle: finalName, rows: [['Teste', `${r.total} contra CD ${check.dc}`], ['Preço', pay ? `T$ ${check.price} (gasto)` : 'não descontado']], note: 'O material e o tempo foram gastos.' });
       return null;
     }
   }
@@ -129,7 +132,6 @@ async function snapshotFromSource(item, st) {
 
 const sign = n => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`);
 const showValue = v => (typeof v === 'number' ? sign(v) : String(v));
-const localize = s => (typeof s === 'string' && globalThis.game?.i18n?.localize ? game.i18n.localize(s) : String(s ?? ''));
 /** Efeito "no uso" vale para este item? (flag `items` do sistema: lista de nomes separada por ;) */
 const forItem = (ef, name) => {
   const list = String(ef.flags?.tormenta20?.items ?? '').split(';').map(s => s.trim()).filter(Boolean);
@@ -148,23 +150,6 @@ function resolveBonus(value, data) {
     try { return Math.floor(Number(Roll.safeEval(text))) || 0; } catch { return text; }
   }
   return text;
-}
-
-/** Perícias da ficha: [{ key, label, value, pda }]. */
-function sheetSkills(actor) {
-  return Object.entries(actor?.system?.pericias ?? {})
-    .filter(([, p]) => p && typeof p === 'object')
-    .map(([key, p]) => ({ key, label: localize(p.label) || key, value: Number(p.value) || 0, pda: p.pda !== false }))
-    .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
-}
-
-/** Poderes da ficha com o texto e se algum efeito permanente deles já soma na perícia `skill`. */
-function sheetPowers(actor, skill) {
-  const touches = new RegExp(`pericias\\.(${skill}|\\*)\\.`);
-  return [...(actor?.items ?? [])].filter(i => i.type === 'poder').map(i => ({
-    uuid: i.id, name: i.name, description: plainText(i.system?.description?.value ?? ''),
-    onSheet: [...(i.effects ?? [])].some(e => !e.flags?.tormenta20?.onuse && (e.changes ?? []).some(c => touches.test(c.key ?? '')))
-  }));
 }
 
 /** Efeitos "no uso" da ficha para testes da perícia (os mesmos da janela do sistema), menos Forçar a Calibragem. */
@@ -290,7 +275,7 @@ async function confirmActivation(actor, item, st, inv, sys) {
       <div class="t20tk-wz-chips">${takes}</div>
       <p>Teste: <b>${escapeHtml(formula)}</b> · chance <b>${chance}%</b> · PM: <b>${cost.total}</b> (você tem ${pmNow(actor)})</p>
       ${zeroOk ? '' : '<p class="t20tk-bz-meta">Escolher 0 aparece quando o bônus já alcança a CD.</p>'}
-      ${craft ? '<p class="t20tk-bz-note">Fabricar não sofre penalidade de armadura. Falhou: nada é descontado.</p>' : st.coupled?.kind === 'armor' ? '<p class="t20tk-bz-note">Acoplada na armadura: não precisa estar empunhada nem vestida.</p>' : st.coupled?.kind === 'automato' ? '<p class="t20tk-bz-note">Acoplada no autômato: com Autômato Engenhocado (+2 PM, ação de movimento), o efeito sai do autômato (alcance curto).</p>' : st.mode === 'hand' ? '<p class="t20tk-bz-note">Engenhoca empunhada: precisa de uma mão livre.</p>' : ''}`;
+      ${craft ? '<p class="t20tk-bz-note">Fabricar não sofre penalidade de armadura. Falhou: o preço e o tempo são gastos.</p>' : st.coupled?.kind === 'armor' ? '<p class="t20tk-bz-note">Acoplada na armadura: não precisa estar empunhada nem vestida.</p>' : st.coupled?.kind === 'automato' ? '<p class="t20tk-bz-note">Acoplada no autômato: com Autômato Engenhocado (+2 PM, ação de movimento), o efeito sai do autômato (alcance curto).</p>' : st.mode === 'hand' ? '<p class="t20tk-bz-note">Engenhoca empunhada: precisa de uma mão livre.</p>' : ''}`;
   };
   const read = el => {
     const n = el.name;

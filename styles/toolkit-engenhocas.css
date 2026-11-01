@@ -37,3 +37,8 @@
 /* acoplar */
 .t20tk-eng .t20tk-eng-couple { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; padding: 0; list-style: none; }
 .t20tk-eng .t20tk-eng-couple li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Fabricação (usa a base das Engenhocas) */
+.t20tk-fab .t20tk-fab-section { margin: 0 var(--t20-pad) 14px; }
+.t20tk-fab .t20tk-fab-section > h3 { margin: 0 0 6px; font-size: 13px; font-weight: 700; border: 0; }
+.t20tk-fab .t20tk-fab-section .t20tk-bz-list { margin: 0; }
+.t20tk-fab .t20tk-bz-filters .t20tk-count { margin-left: 4px; }
