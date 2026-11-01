@@ -122,7 +122,10 @@ export function evaluatePrerequisites(text, ctx) {
       return have >= Number(m[1]);
     }
     m = f.match(/^(for|des|con|int|sab|car)\s*(-?\d+)$/);
-    if (m) return (ctx.attributes[ATTR[m[1]]] ?? 0) >= Number(m[2]);
+    if (m) {
+      const ok = (ctx.attributes[ATTR[m[1]]] ?? 0) >= Number(m[2]);
+      return ok || !ctx.attributesPending ? ok : null; // criação: atributos ainda não distribuídos = conferir
+    }
     m = f.match(/^lancar magias de (\d)[ºo°]? circulo$/);
     if (m) return (ctx.maxCircle ?? 0) >= Number(m[1]);
     if (f === 'lancar magias') return (ctx.maxCircle ?? 0) >= 1 || null; // magias de raça ou poder não entram no círculo
