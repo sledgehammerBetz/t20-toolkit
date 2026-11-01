@@ -32,6 +32,8 @@
 .t20tk-eng-confirm .t20tk-chip { display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border: 1px solid var(--t20-border-subtle, #8886); border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; }
 .t20tk-eng-confirm .t20tk-chip.is-on { border: 2px solid var(--t20-accent, #c0392b); color: var(--t20-accent, #c0392b); font-weight: 700; }
 .t20tk-eng-confirm .t20tk-bz-meta { opacity: .75; font-size: 12px; }
+.t20tk-eng-desc { margin: 0 0 8px; }
+.t20tk-eng-desc .t20tk-disclosure-body { max-height: 220px; overflow-y: auto; }
 /* acoplar */
 .t20tk-eng .t20tk-eng-couple { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; padding: 0; list-style: none; }
 .t20tk-eng .t20tk-eng-couple li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
