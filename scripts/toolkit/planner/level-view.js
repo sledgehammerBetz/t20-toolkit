@@ -161,16 +161,15 @@ export function missingChoices(app, level, gains) {
     .filter(([g, p]) => p && powerChoice(p) && !entry.sub?.[g.id]).map(([, p]) => `${powerChoice(p).label} (${p.name})`);
 }
 
-function renderChoice(app, chosen, gainId, entry) {
+function renderChoice(app, chosen, gainId, entry, { cur = entry?.sub?.[gainId] ?? '', action = 'lvSub' } = {}) {
   const spec = powerChoice(chosen);
   if (!spec) return '';
-  const cur = entry.sub?.[gainId] ?? '';
-  const taken = spec.distinct ? choiceTaken(app, chosen, app.selected, gainId) : new Set();
+  const taken = spec.distinct ? choiceTaken(app, chosen, gainId ? app.selected : null, gainId) : new Set();
   const opts = powerChoiceOptions(spec, app.index, skillLabels());
   if (!opts.length) return `<p class="t20tk-bz-warn">${escapeHtml(spec.label)}: nenhuma opção nos compêndios ativos; anote na ficha.</p>`;
   return `<div class="t20tk-wz-field t20tk-lv-choice"><span>${escapeHtml(spec.label)}${cur ? '' : ' <em class="t20tk-wz-missing">falta escolher</em>'}</span><div class="t20tk-wz-chips">${opts.map(o => {
     const off = taken.has(o.value) && o.value !== cur;
-    return `<button type="button" class="t20tk-chip ${o.value === cur ? 'is-on' : ''}" data-action="lvSub" data-gain="${gainId}" data-value="${escapeHtml(o.value)}" ${off ? 'disabled title="já escolhido em outra cópia deste poder"' : ''}>${escapeHtml(o.label)}</button>`;
+    return `<button type="button" class="t20tk-chip ${o.value === cur ? 'is-on' : ''}" data-action="${action}" data-gain="${gainId ?? ''}" data-value="${escapeHtml(o.value)}" ${off ? 'disabled title="já escolhido em outra cópia deste poder"' : ''}>${escapeHtml(o.label)}</button>`;
   }).join('')}</div></div>`;
 }
 
@@ -409,7 +408,7 @@ export function renderExtraPage(app) {
       const sources = x.type === 'classe' ? sheetGrantSources(app.actor) : [];
       const viaRow = sources.length ? `<div class="t20tk-wz-field"><span>Pelo poder (outra classe)</span><div class="t20tk-wz-chips">${[['', 'Nenhum'], ...sources.map(s => [s.key, s.def.name])].map(([v, l]) => `<button type="button" class="t20tk-chip ${(x.via ?? '') === v ? 'is-on' : ''}" data-action="lvExtraVia" data-value="${escapeHtml(v)}">${escapeHtml(l)}</button>`).join('')}</div></div>` : '';
       pick = viaRow + (chosen
-        ? `<div class="t20tk-lv-gain" data-kind="power">${chosen.img ? `<img src="${escapeHtml(chosen.img)}" alt="">` : '<span class="t20tk-wz-noimg"><i class="fa-solid fa-star" inert></i></span>'}<span><small>${escapeHtml(type.label)}</small><b>${escapeHtml(chosen.name)}</b><em>${escapeHtml(strip(chosen.description).slice(0, 120))}…</em></span><button type="button" class="t20tk-ui-button" data-action="lvBrowse" data-kind="extra">Trocar…</button></div>`
+        ? `<div class="t20tk-lv-gain" data-kind="power">${chosen.img ? `<img src="${escapeHtml(chosen.img)}" alt="">` : '<span class="t20tk-wz-noimg"><i class="fa-solid fa-star" inert></i></span>'}<span><small>${escapeHtml(type.label)}</small><b>${escapeHtml(chosen.name)}</b><em>${escapeHtml(strip(chosen.description).slice(0, 120))}…</em></span><button type="button" class="t20tk-ui-button" data-action="lvBrowse" data-kind="extra">Trocar…</button></div>${renderChoice(app, chosen, null, null, { cur: x.sub ?? '', action: 'lvExtraSub' })}`
         : `<button type="button" class="t20tk-xg-choose" data-action="lvBrowse" data-kind="extra"><b>Escolher ${escapeHtml(type.label.toLowerCase())}…</b><small>abre a lista com busca e filtros</small></button>`);
     }
     const label = x.type === 'pericia' ? skillLabels()[x.value] : x.type === 'atributo' ? (x.value ? `+1 em ${x.value.toUpperCase()}` : '') : app.index.powerByUuid.get(x.value)?.name;
@@ -419,7 +418,7 @@ export function renderExtraPage(app) {
       <div class="t20tk-xg-step"><span>3</span><b>Motivo</b> <small>(opcional)</small></div>
       <input type="text" class="t20tk-xg-reason" name="extraReason" value="${escapeHtml(x.reason ?? '')}" placeholder="ex.: treino com o mestre de armas de Valkaria">
       <footer class="t20tk-xg-foot"><span>${label ? `Vai para a ficha: <b>${escapeHtml(label)}</b>` : 'Escolha o que entra na ficha.'}</span>
-        <button type="button" class="t20tk-ui-button t20tk-ui-button--primary" data-action="addExtra" ${x.value ? '' : 'disabled'}>Adicionar à ficha</button></footer>
+        <button type="button" class="t20tk-ui-button t20tk-ui-button--primary" data-action="addExtra" ${x.value && !(powerChoice(app.index.powerByUuid.get(x.value)) && !x.sub) ? '' : 'disabled'}>Adicionar à ficha</button></footer>
     </section>`;
   } else if (mode === 'gm') form = '<p class="t20tk-bz-note">Só o mestre registra ganhos extras (Regras da mesa).</p>';
 
@@ -478,7 +477,8 @@ export const LEVEL_ACTIONS = {
   lvExtraPage() { this.page = 'extra'; this.browse = null; this.render(); },
   lvExtraType(event, target) { this.extra = { ...(this.extra ?? {}), type: target.dataset.value, value: '', via: '', touched: true }; this.render(); },
   lvExtraVia(event, target) { this.extra = { ...(this.extra ?? {}), via: target.dataset.value, value: '', touched: true }; this.render(); },
-  lvExtraValue(event, target) { this.extra = { ...(this.extra ?? {}), value: target.dataset.value, touched: true }; this.browse = null; this.render(); }
+  lvExtraValue(event, target) { this.extra = { ...(this.extra ?? {}), value: target.dataset.value, sub: '', touched: true }; this.browse = null; this.render(); },
+  lvExtraSub(event, target) { const x = this.extra ?? {}; this.extra = { ...x, sub: x.sub === target.dataset.value ? '' : target.dataset.value }; this.render(); }
 };
 
 /** Campos de texto e caixas da página do nível. */

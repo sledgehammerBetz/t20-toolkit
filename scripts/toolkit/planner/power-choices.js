@@ -10,10 +10,15 @@
  */
 import { fold, SPELL_SCHOOLS } from '../core/t20.js';
 
-const FAMILIARS = /^familiar (borboleta|cobra|coruja|corvo|falcao|gato|lagarto|morcego|rato|sapo)$/;
+const BASIC_FAMILIARS = /^familiar (borboleta|cobra|coruja|corvo|falcao|gato|lagarto|morcego|rato|sapo)$/;
+/** Familiar de qualquer livro: básicos do Tormenta20 ("Familiar Gato") e de outros livros ("Aquin’ne (Familiar)"). */
+const ANY_FAMILIAR = key => BASIC_FAMILIARS.test(key) || /\(familiar\)$/.test(key);
+const familiarLabel = name => name.replace(/^Familiar\s+/i, '').replace(/\s*\(Familiar\)$/i, '');
 
 export const POWER_CHOICES = Object.freeze({
-  'familiar': { kind: 'variant', label: 'Qual familiar', match: key => FAMILIARS.test(key), book: 'Tormenta20, p. 38' },
+  'familiar': { kind: 'variant', label: 'Qual familiar', match: ANY_FAMILIAR, book: 'Tormenta20, p. 38; Ameaças de Arton' },
+  // Heróis de Arton: o segundo benefício vem dos tipos comuns (Tormenta20, p. 38).
+  'familiar aprimorado': { kind: 'variant', label: 'Segundo benefício', match: key => BASIC_FAMILIARS.test(key), book: 'Heróis de Arton', keepVisible: true },
   'especialista em escola': { kind: 'options', label: 'Escola de magia', options: Object.values(SPELL_SCHOOLS) },
   'mestre em escola': { kind: 'options', label: 'Escola de magia', options: Object.values(SPELL_SCHOOLS) },
   'totem espiritual': { kind: 'options', label: 'Animal totêmico', options: ['Coruja', 'Corvo', 'Falcão', 'Grifo', 'Lobo', 'Raposa', 'Tartaruga', 'Urso'] },
@@ -36,7 +41,12 @@ export const powerChoice = power => (power ? POWER_CHOICES[fold(power.name)] ?? 
  */
 export function powerChoiceOptions(spec, idx, labels = {}) {
   if (!spec) return [];
-  if (spec.kind === 'variant') return idx.powers.filter(p => spec.match(p.key)).map(p => ({ value: p.uuid, label: p.name.replace(/^Familiar\s+/i, '') }));
+  if (spec.kind === 'variant') {
+    const seen = new Set();
+    return idx.powers.filter(p => spec.match(p.key) && !seen.has(p.key) && seen.add(p.key))
+      .map(p => ({ value: p.uuid, label: familiarLabel(p.name), book: p.packLabel ?? '' }))
+      .sort((a, b) => (BASIC_FAMILIARS.test(fold(idx.powerByUuid?.get(b.value)?.name ?? '')) - BASIC_FAMILIARS.test(fold(idx.powerByUuid?.get(a.value)?.name ?? ''))) || a.label.localeCompare(b.label, 'pt-BR'));
+  }
   if (spec.kind === 'options') return spec.options.map(o => ({ value: o, label: o }));
   if (spec.kind === 'skill') return Object.entries(labels).filter(([k]) => !(spec.exclude ?? []).includes(k)).map(([k, l]) => ({ value: k, label: l }));
   if (spec.kind === 'weapon') {
@@ -57,5 +67,5 @@ export function powerChoiceLabel(spec, value, idx, labels = {}) {
 
 /** Variantes que só fazem sentido pela escolha do poder base (somem da lista de poderes). */
 export function isChoiceVariant(power, pool) {
-  return Object.entries(POWER_CHOICES).some(([base, spec]) => spec.kind === 'variant' && spec.match(power.key) && pool.some(p => p.key === base));
+  return Object.entries(POWER_CHOICES).some(([base, spec]) => spec.kind === 'variant' && !spec.keepVisible && spec.match(power.key) && pool.some(p => p.key === base));
 }

@@ -320,17 +320,32 @@ export class PlannerApp extends ApplicationV2 {
       if (!doc) return;
       const data = game.items.fromCompendium(doc);
       foundry.utils.setProperty(data, `flags.${MODULE_ID}.extraGain`, true);
+      // Escolha dentro do poder (Familiar → qual animal...): mesma regra da página do nível.
+      const spec = powerChoice(this.index.powerByUuid.get(x.value));
+      const choice = spec && x.sub ? { value: x.sub, label: powerChoiceLabel(spec, x.sub, this.index, skillLabels()) } : null;
+      if (choice) {
+        foundry.utils.setProperty(data, `flags.${MODULE_ID}.choice`, choice.value);
+        foundry.utils.setProperty(data, 'system.description.value', `<p><b>Escolha:</b> ${escapeHtml(choice.label)}</p>${foundry.utils.getProperty(data, 'system.description.value') ?? ''}`);
+      }
+      const variantDoc = choice && spec.kind === 'variant' ? await fromUuid(choice.value) : null;
+      let variantId = null;
+      if (variantDoc) {
+        const vd = game.items.fromCompendium(variantDoc);
+        foundry.utils.setProperty(vd, `flags.${MODULE_ID}.extraGain`, true);
+        [{ id: variantId }] = await actor.createEmbeddedDocuments('Item', [vd]);
+      }
       // Poder de outra classe dado por um poder da ficha (Cavaleiro Sagrado, Diferentão...): guarda a fonte.
       const def = x.type === 'classe' && x.via ? CROSS_CLASS_SOURCES[x.via] : null;
       if (def) foundry.utils.setProperty(data, `flags.${MODULE_ID}.via`, viaFlag(def, { subtipo: doc.system?.subtipo }));
       const [item] = await actor.createEmbeddedDocuments('Item', [data]);
-      entry = { type: x.type, itemId: item?.id, label: def ? `${doc.name} (por ${def.name})` : doc.name, img: doc.img };
+      const name = choice ? `${doc.name} (${choice.label})` : doc.name;
+      entry = { type: x.type, itemId: item?.id, ...(variantId ? { variantId } : {}), label: def ? `${name} (por ${def.name})` : name, img: doc.img };
     }
     entry = { ...entry, kindLabel: KIND[x.type], reason, level, by: game.user?.name ?? '' };
     const list = [...(actor.getFlag(MODULE_ID, 'extraGains') ?? []), entry];
     await actor.update({ ...update, [`flags.${MODULE_ID}.extraGains`]: list });
     await postCard(actor, { tool: 'planner', tone: 'success', title: 'Ganho fora da progressão', subtitle: `${actor.name} · ${KIND[x.type]}`, items: [{ name: entry.label, img: entry.img }], note: reason ? `Motivo: ${reason}` : '' });
-    this.extra = { type: x.type, value: '', reason: '' };
+    this.extra = { type: x.type, value: '', sub: '', reason: '' };
     this.render();
   }
 
@@ -349,7 +364,7 @@ export class PlannerApp extends ApplicationV2 {
     }
     if (g.type === 'pericia') update[g.created ? `system.pericias.-=${g.key}` : `system.pericias.${g.key}.treinado`] = g.created ? null : false;
     if (g.type === 'atributo') update[`system.atributos.${g.key}.base`] = (Number(actor.system?.atributos?.[g.key]?.base) || 0) - 1;
-    await Promise.all([g.itemId ? actor.items.get(g.itemId)?.delete() : null, actor.update(update)]);
+    await Promise.all([g.itemId ? actor.items.get(g.itemId)?.delete() : null, g.variantId ? actor.items.get(g.variantId)?.delete() : null, actor.update(update)]);
     this.render();
   }
 
