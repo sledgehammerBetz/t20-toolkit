@@ -6,5 +6,6 @@ export const TOOLKIT_FEATURES = Object.freeze([
   Object.freeze({ id:'escriba', short:'Copie magias de pergaminhos e grimórios', title:'Escriba Arcano', status:'available', description:'Copie magias de pergaminhos e grimórios: 1 dia e T$ 250 por PM. Não ocupa as escolhas de nível.' }),
   Object.freeze({ id:'usurpador', short:'Use magias e poderes divinos usurpados', title:'Usurpador', status:'available', description:'Usurpar magias divinas com Enganação, Poder Capturado e Roubo Divino automático (Heróis de Arton).' }),
   Object.freeze({ id:'engenhocas', short:'Fabrique, ative e instale aparatos', title:'Engenhocas', status:'available', description:'Bancada (ativar e consertar), Oficina (fabricar) e Aparatos, numa janela só.' }),
+  Object.freeze({ id:'fabricacao', short:'Cozinhe pratos e prepare alquímicos', title:'Fabricação', status:'available', description:'Comidas, preparados alquímicos, catalisadores e venenos: teste de Ofício, matéria-prima e refeição do dia.' }),
   Object.freeze({ id:'regras', short:'Regras opcionais e homebrews da campanha', title:'Regras da mesa', status:'available', description:'Métodos de atributos, raças e devoções abertas, complicações, idade, origens extras, distinções e ganhos fora da progressão.' })
 ]);

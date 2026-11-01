@@ -9,11 +9,11 @@ const groups = Object.freeze([
   {label:'PERSONAGEM',ids:['leveler']},
   {label:'CONSULTA',ids:['buscador']},
   {label:'MAGIAS E ESTUDO',ids:['grimorio','escriba']},
-  {label:'MECÂNICAS ESPECIAIS',ids:['usurpador','engenhocas']},
+  {label:'MECÂNICAS ESPECIAIS',ids:['usurpador','engenhocas','fabricacao']},
   {label:'MESTRE',ids:['regras']}
 ]);
-const glyph = Object.freeze({hub:'fa-house',leveler:'fa-route',buscador:'fa-magnifying-glass',grimorio:'fa-book',escriba:'fa-feather',usurpador:'fa-hand-sparkles',engenhocas:'fa-gears',regras:'fa-scale-balanced'});
-const supportedActions = Object.freeze({leveler:'Abrir Planejador',engenhocas:'Abrir Engenhocas',grimorio:'Abrir Grimório',buscador:'Abrir Buscador',escriba:'Abrir Escriba',usurpador:'Abrir Usurpador',regras:'Abrir Regras da mesa'});
+const glyph = Object.freeze({hub:'fa-house',leveler:'fa-route',buscador:'fa-magnifying-glass',grimorio:'fa-book',escriba:'fa-feather',usurpador:'fa-hand-sparkles',engenhocas:'fa-gears',fabricacao:'fa-mortar-pestle',regras:'fa-scale-balanced'});
+const supportedActions = Object.freeze({leveler:'Abrir Planejador',engenhocas:'Abrir Engenhocas',grimorio:'Abrir Grimório',buscador:'Abrir Buscador',escriba:'Abrir Escriba',usurpador:'Abrir Usurpador',fabricacao:'Abrir Fabricação',regras:'Abrir Regras da mesa'});
 const featureById=(features,id)=>features.find(f=>f?.id===id);
 
 export function orderedToolkitFeatures(features=TOOLKIT_FEATURES) {

@@ -27,6 +27,7 @@ const openBuscador = lazy('./buscador/buscador-app.js', 'openBuscador');
 const openEngenhocas = lazy('./engenhocas/engenhocas-app.js', 'openEngenhocas');
 const activateEngenhoca = lazy('./engenhocas/engenhocas-actions.js', 'activateEngenhoca');
 const openHome = lazy('./home/home-app.js', 'openHome');
+const openFabricacao = lazy('./fabricacao/fabricacao-app.js', 'openFabricacao');
 const getSpellIndex = lazy('./core/spell-index.js', 'getSpellIndex');
 const reloadCompendiums = () => Promise.all([
   import('./core/spells/spell-catalog.js').then(m => m.getSpellCatalog({ refresh: true })),
@@ -58,6 +59,7 @@ export function bindToolkitHub(root,{
     escriba:()=> openEscriba({actor}),
     usurpador:()=> openUsurpador({actor}),
     leveler:()=> (services.openLeveler??openPlanner)({actor}),
+    fabricacao:()=> openFabricacao({actor}),
     regras:()=> openRegras({actor})
   };
   const onError=(action,error)=>{
@@ -115,6 +117,7 @@ if (globalThis.Hooks?.once) {
       grimorio:Object.freeze({open:openGrimorio,read:readGrimorio}),
       escriba:Object.freeze({open:openEscriba}),
       usurpador:Object.freeze({open:openUsurpador}),
+      fabricacao:Object.freeze({open:openFabricacao}),
       buscador:Object.freeze({open:openBuscador,profiles:actor=>casterContext(actor),index:getSpellIndex,invalidate:reloadCompendiums}),
       report:openReport,
       diagnostics:(o={})=>diagnostics(o),
@@ -132,7 +135,10 @@ if (globalThis.Hooks?.once) {
     });
     installToolkitSheetButton(game.t20Toolkit);
   });
-  Hooks.once('setup',()=>{ installCastingGuard(); installDirectUse(); });
+  Hooks.once('setup',()=>{
+    installCastingGuard(); installDirectUse();
+    import('./fabricacao/fabricacao-actions.js').then(m=>m.installFabricacao()).catch(error=>console.error('[T20 Toolkit] Fabricação:',error));
+  });
   Hooks.once('ready',async()=>{
     try {
       const m=await migrateLegacyWorldSettings();

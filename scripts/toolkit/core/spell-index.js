@@ -12,7 +12,11 @@ const SPELL_FIELDS = [
   'system.ativacao.custo', 'system.ativacao.execucao', 'system.alcance', 'system.duracao', 'system.resistencia.txt'
 ];
 const PLANNER_FIELDS = ['system.subtipo', 'system.description.value', 'system.pvPorNivel', 'system.pmPorNivel', 'system.pericias', 'system.atributos', 'system.atributosDinamicos', 'system.grants', 'system.proficiencia', 'system.proposito'];
-export const INDEX_FIELDS = Object.freeze([...new Set([...SPELL_FIELDS, ...PLANNER_FIELDS])]);
+/** Fabricação: preço dos consumíveis (a matéria-prima custa um terço). */
+const ITEM_FIELDS = ['system.preco'];
+export const INDEX_FIELDS = Object.freeze([...new Set([...SPELL_FIELDS, ...PLANNER_FIELDS, ...ITEM_FIELDS])]);
+/** Nome do índice no cache do navegador: muda junto com a lista de campos, para não ler um índice antigo sem os campos novos. */
+const INDEX_KIND = 'index-2';
 
 let cache = null;
 
@@ -52,12 +56,12 @@ export function getCompendiumIndex({ refresh = false, gameRef = globalThis.game 
   if (shared && !refresh) return shared;
   shared = Promise.all(spellPacks(gameRef).map(async pack => {
     if (!refresh) {
-      const hit = await readPack('index', pack, gameRef);
+      const hit = await readPack(INDEX_KIND, pack, gameRef);
       if (hit) return { pack, entries: hit };
     }
     try {
       const entries = [...await pack.getIndex({ fields: INDEX_FIELDS })];
-      writePack('index', pack, entries, gameRef);
+      writePack(INDEX_KIND, pack, entries, gameRef);
       return { pack, entries };
     } catch (error) {
       console.warn(`[T20 Toolkit] Não foi possível ler o compêndio ${pack.collection}:`, error);

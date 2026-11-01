@@ -15,6 +15,7 @@ export const TOOLS = Object.freeze([
   { id: 'escriba', icon: 'fa-solid fa-feather', label: 'Escriba', title: 'Escriba Arcano' },
   { id: 'usurpador', icon: 'fa-solid fa-hand-sparkles', label: 'Usurpador' },
   { id: 'engenhocas', icon: 'fa-solid fa-gears', label: 'Engenhocas' },
+  { id: 'fabricacao', icon: 'fa-solid fa-mortar-pestle', label: 'Fabricação' },
   { id: 'regras', icon: 'fa-solid fa-scale-balanced', label: 'Regras da mesa', bottom: true }
 ]);
 

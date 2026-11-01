@@ -1,7 +1,7 @@
 {
   "id": "t20-toolkit",
   "title": "T20 Toolkit — Ferramentas para Tormenta20",
-  "description": "Ferramentas para Tormenta20 1.5.015: Planejador de Personagem (criação e níveis 1–20), Buscador de Magias, Grimório do Mago, Escriba Arcano, Usurpador, Engenhocas e Regras da mesa. Beta fechada.",
+  "description": "Ferramentas para Tormenta20 1.5.015: Planejador de Personagem (criação e níveis 1–20), Buscador de Magias, Grimório do Mago, Escriba Arcano, Usurpador, Engenhocas, Fabricação (comidas e alquimia) e Regras da mesa. Beta fechada.",
   "version": "0.12.1-beta.1",
   "authors": [
     {

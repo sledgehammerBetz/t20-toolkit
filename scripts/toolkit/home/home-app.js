@@ -19,7 +19,7 @@ import { engenhocaState, isEngenhoca, isInventorClass } from '../engenhocas/enge
 import { dayKey } from '../grimorio/grimorio-rules.js';
 
 const ApplicationV2 = globalThis.foundry?.applications?.api?.ApplicationV2 ?? class {};
-const GLYPH = { leveler: 'fa-route', buscador: 'fa-magnifying-glass', grimorio: 'fa-book', escriba: 'fa-feather', usurpador: 'fa-hand-sparkles', engenhocas: 'fa-gears', regras: 'fa-scale-balanced' };
+const GLYPH = { leveler: 'fa-route', buscador: 'fa-magnifying-glass', grimorio: 'fa-book', escriba: 'fa-feather', usurpador: 'fa-hand-sparkles', engenhocas: 'fa-gears', fabricacao: 'fa-mortar-pestle', regras: 'fa-scale-balanced' };
 const glyph = id => `<i class="fa-solid ${GLYPH[id] ?? 'fa-circle-info'}" inert></i>`;
 const TOOL_OF = { leveler: 'planner' };
 
@@ -99,6 +99,12 @@ export function homeSummary(actor, { rules = getTableRules(), isGM = false, day 
     else if (engs.length) info.push({ tool: 'engenhocas', text: `${engs.length} engenhoca(s) prontas.` });
     else todo.push({ tone: 'info', tool: 'engenhocas', text: 'Inventor sem engenhocas ainda.', action: 'Fabricar' });
   }
+
+  // Fabricação: quem é treinado em Ofício (alquimista ou cozinheiro) ou tem refeição do dia.
+  const crafts = ['alqu', 'cozi'].filter(k => actor?.system?.pericias?.[k]?.treinado);
+  const meals = [...(actor?.effects ?? [])].filter(e => e.flags?.[MODULE_ID]?.food?.day).map(e => e.flags[MODULE_ID].food.name);
+  if (crafts.length || meals.length) relevant.add('fabricacao');
+  if (meals.length) info.push({ tool: 'fabricacao', text: `Refeição do dia: ${[...new Set(meals)].join(', ')}.` });
 
   const sys = actor?.system ?? {};
   return {

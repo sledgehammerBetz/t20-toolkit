@@ -8,10 +8,11 @@
  * Preferências do teste em flags['t20-toolkit'].engenhocasTeste = { skill, fx, text }.
  */
 import { MODULE_ID } from '../../constants.js';
-import { escapeHtml, actorClasses, plainText, fold } from '../core/t20.js';
+import { escapeHtml, actorClasses, fold } from '../core/t20.js';
 import { powerClassLevel } from '../core/class-levels.js';
 import { chatCard, chatFlavor, postCard } from '../ui/chat.js';
 import { enrichDescription } from '../ui/enrich.js';
+import { sheetSkills, sheetPowers } from '../core/sheet-skills.js';
 import { skillSubstitutes, textBonuses, testParts, fixedBonus, allFixed, testFormula, chanceOf, canChooseZero } from '../core/skill-test.js';
 import {
   FLAG_SCOPE, FLAG_KEY, SKILL_KEY, APARATO_BY_ID, ENGENHOCA_ITEM_TYPE, COUPLE_PRICE, isEngenhoca, engenhocaState, engenhocaFlags, inventorContext,
@@ -129,7 +130,6 @@ async function snapshotFromSource(item, st) {
 
 const sign = n => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`);
 const showValue = v => (typeof v === 'number' ? sign(v) : String(v));
-const localize = s => (typeof s === 'string' && globalThis.game?.i18n?.localize ? game.i18n.localize(s) : String(s ?? ''));
 /** Efeito "no uso" vale para este item? (flag `items` do sistema: lista de nomes separada por ;) */
 const forItem = (ef, name) => {
   const list = String(ef.flags?.tormenta20?.items ?? '').split(';').map(s => s.trim()).filter(Boolean);
@@ -148,23 +148,6 @@ function resolveBonus(value, data) {
     try { return Math.floor(Number(Roll.safeEval(text))) || 0; } catch { return text; }
   }
   return text;
-}
-
-/** Perícias da ficha: [{ key, label, value, pda }]. */
-function sheetSkills(actor) {
-  return Object.entries(actor?.system?.pericias ?? {})
-    .filter(([, p]) => p && typeof p === 'object')
-    .map(([key, p]) => ({ key, label: localize(p.label) || key, value: Number(p.value) || 0, pda: p.pda !== false }))
-    .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
-}
-
-/** Poderes da ficha com o texto e se algum efeito permanente deles já soma na perícia `skill`. */
-function sheetPowers(actor, skill) {
-  const touches = new RegExp(`pericias\\.(${skill}|\\*)\\.`);
-  return [...(actor?.items ?? [])].filter(i => i.type === 'poder').map(i => ({
-    uuid: i.id, name: i.name, description: plainText(i.system?.description?.value ?? ''),
-    onSheet: [...(i.effects ?? [])].some(e => !e.flags?.tormenta20?.onuse && (e.changes ?? []).some(c => touches.test(c.key ?? '')))
-  }));
 }
 
 /** Efeitos "no uso" da ficha para testes da perícia (os mesmos da janela do sistema), menos Forçar a Calibragem. */
