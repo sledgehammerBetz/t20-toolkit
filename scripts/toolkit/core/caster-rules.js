@@ -94,8 +94,13 @@ export function evaluateForProfile(spell, profile) {
   else if (spell.circle > profile.maxCircle) block(`${spell.circle}º círculo: ${profile.label} nível ${profile.level} lança até o ${profile.maxCircle}º.`);
 
   const t = spell.type;
-  let typeOk = t === 'uni' || t === profile.tradition;
-  if (profile.necromancer && t === 'div' && spell.school === 'nec') typeOk = true;
+  let typeOk = !isOffTradition(spell, profile);
+  let via = null;
+  if (!typeOk) {
+    // Poderes que liberam magias da outra tradição (Teurgista Místico, Aumentar Repertório, linhagens...).
+    via = (profile.grants ?? []).find(g => grantFits(g, spell, profile)) ?? null;
+    if (via) typeOk = true;
+  }
   if (!typeOk) block(`Magia ${t === 'div' ? 'divina' : t === 'arc' ? 'arcana' : t}: ${profile.label} lança magias ${profile.tradition === 'arc' ? 'arcanas' : 'divinas'}.`);
 
   if (profile.necromancer && spell.school === 'enc') block('Necromante não pode aprender magias de encantamento.');
@@ -105,7 +110,111 @@ export function evaluateForProfile(spell, profile) {
     else if (!profile.schools.includes(spell.school)) block(`Escola fora das escolhidas pelo ${profile.label}.`);
   }
   if (profile.usurper && status !== 'blocked') return { status: 'review', reasons: ['Usurpador lança por Usurpar; não adiciona magias à lista.'] };
-  return { status, reasons };
+  return via && status !== 'blocked' ? { status, reasons, grant: via.label } : { status, reasons };
+}
+
+/** Magia de outra tradição para o perfil (universais nunca são; o Necromante aprende divinas de necromancia). */
+export function isOffTradition(spell, profile) {
+  const t = spell.type;
+  if (t === 'uni' || t === profile.tradition) return false;
+  if (profile.necromancer && t === 'div' && spell.school === 'nec') return false;
+  return true;
+}
+
+/** A vaga do poder ainda aceita esta magia? */
+function grantFits(g, spell, profile) {
+  if (g.tradition && g.tradition !== spell.type) return false;
+  if (g.maxCircle && !(spell.circle <= g.maxCircle)) return false;
+  if (!(spell.circle <= profile.maxCircle)) return false;
+  if (g.schools && !g.schools.includes(spell.school)) return false;
+  if (g.perCircle) return !g.usedCircles.has(spell.circle);
+  return g.used < g.slots;
+}
+
+/**
+ * Poderes que dão magias a uma classe. Magias aprendidas por eles são magias da classe (JdA p. 171) e entram na
+ * capacidade dela. `bonus`: magias a mais (número ou função do perfil); `slots`: quantas podem ser da outra
+ * tradição (Infinity = qualquer quantidade); `perCircle`: uma da outra tradição por círculo.
+ * `cls: null` = a classe vem do subtipo do poder ou do nome entre parênteses; `cls: '*'` = todas as classes.
+ */
+export const CLASS_SPELL_POWERS = Object.freeze([
+  { name: /^conhecimento magico\b/, cls: null, bonus: 2, label: 'Conhecimento Mágico' },
+  { name: /^aumentar repertorio$/, cls: 'bardo', bonus: 2, slots: 2, label: 'Aumentar Repertório' },
+  { name: /^segredos da natureza$/, cls: 'druida', bonus: 2, slots: 2, label: 'Segredos da Natureza' },
+  { name: /^linhagem feerica( basica)?$/, cls: 'arcanista', once: 'feerica', bonus: 1, slots: 1, maxCircle: 1, schools: ['enc', 'ilu'], label: 'Linhagem Feérica' },
+  { name: /^aspecto da primavera$/, cls: 'druida', bonus: 1, slots: 1, schools: ['enc', 'ilu'], label: 'Aspecto da Primavera' },
+  { name: /^aspecto do outono$/, cls: 'druida', bonus: 1, slots: 1, schools: ['nec'], label: 'Aspecto do Outono' },
+  { name: /^aspecto do verao$/, cls: 'druida', bonus: 1, slots: 1, schools: ['tra'], label: 'Aspecto do Verão' },
+  { name: /^aspecto do inverno$/, cls: 'druida', bonus: 1, slots: 1, schools: ['con', 'evo'], label: 'Aspecto do Inverno' },
+  { name: /^linhagem abencoada basica$/, cls: 'arcanista', bonus: 1, slots: Infinity, tradition: 'div', maxCircle: 1, label: 'Linhagem Abençoada' },
+  { name: /^linhagem abencoada aprimorada$/, cls: 'arcanista', bonus: 0, slots: Infinity, tradition: 'div', maxCircle: 3, label: 'Linhagem Abençoada Aprimorada' },
+  { name: /^linhagem abencoada superior$/, cls: 'arcanista', bonus: 0, slots: Infinity, tradition: 'div', maxCircle: 5, label: 'Linhagem Abençoada Superior',
+    note: 'Linhagem Abençoada Superior: as magias divinas extras (uma por círculo, limitadas pela Sabedoria) não estão na conta; combine com o mestre.' },
+  { name: /^apoteose celestial$/, cls: 'arcanista', bonus: p => p.maxCircle, perCircle: true, tradition: 'div', label: 'Apoteose Celestial' },
+  // Teurgista Místico (JdA p. 135): uma magia de cada círculo pode ser da outra tradição; não dá magias a mais.
+  { name: /^teurgista mistico$/, cls: '*', bonus: 0, perCircle: true, shared: true, label: 'Teurgista Místico' }
+]);
+
+/** Classe a que um poder de magias se refere: subtipo ("Arcanista") ou parênteses ("Conhecimento Mágico (Clérigo)"). */
+function powerClass(power) {
+  const paren = /\(([^)]+)\)\s*$/.exec(power.name ?? '');
+  return fold(power.subtipo || paren?.[1] || '');
+}
+
+/**
+ * Aplica os poderes de magias da ficha aos perfis (magias a mais e vagas da outra tradição) e conta as vagas já
+ * usadas pelas magias conhecidas. Muda os perfis no lugar e os devolve.
+ * @param {object[]} profiles  de buildCasterProfiles
+ * @param {{name:string, subtipo?:string}[]} powers
+ * @param {{circle:number,type:string,school:string,learnedBy?:string}[]} knownSpells
+ */
+export function applySpellPowers(profiles, powers = [], knownSpells = []) {
+  const own = profiles.filter(p => !p.fromPower && !p.usurper);
+  for (const p of profiles) p.grants = [];
+  const seen = new Set();
+  const shared = new Map();
+  for (const power of powers) {
+    const key = fold(power.name);
+    const def = CLASS_SPELL_POWERS.find(d => d.name.test(key));
+    if (!def) continue;
+    if (def.once) { if (seen.has(def.once)) continue; seen.add(def.once); }
+    const targets = def.cls === '*' ? own : own.filter(p => p.id === (def.cls ?? powerClass(power)) || (def.cls === null && !powerClass(power) && own.length === 1));
+    for (const p of targets.slice(0, def.cls === '*' ? undefined : 1)) {
+      const bonus = typeof def.bonus === 'function' ? def.bonus(p) : def.bonus;
+      if (bonus) { p.known += bonus; p.notes.push(`${def.label}: +${bonus} magia${bonus > 1 ? 's' : ''}.`); }
+      if (def.note) p.notes.push(def.note);
+      if (!def.slots && !def.perCircle) continue;
+      let g = def.shared ? shared.get(def.label) : null;
+      if (!g) {
+        g = { label: def.label, slots: def.slots ?? 0, used: 0, perCircle: !!def.perCircle, usedCircles: new Set(),
+          maxCircle: def.maxCircle ?? 0, schools: def.schools ?? null, tradition: def.tradition ?? null };
+        if (def.shared) shared.set(def.label, g);
+      }
+      if (def.shared && p.grants.includes(g)) continue;
+      // Poder repetido (Aumentar Repertório 2x) soma vagas na mesma entrada.
+      const same = !def.shared && p.grants.find(x => x.label === g.label);
+      if (same) same.slots += def.slots ?? 0;
+      else p.grants.push(g);
+    }
+  }
+  for (const p of own) {
+    if (p.grants.some(g => g.label === 'Teurgista Místico')) {
+      p.notes.push(`Teurgista Místico: uma magia de cada círculo pode ser ${p.tradition === 'arc' ? 'divina' : 'arcana'}.`);
+    }
+  }
+  // Vagas já usadas: magias da outra tradição aprendidas pela classe (sem registro = primeira classe).
+  const owner = s => profiles.find(p => p.id === s.learnedBy && !p.fromPower) ?? (s.learnedBy ? null : own[0]);
+  const ordered = [...knownSpells].sort((a, b) => (a.circle ?? 0) - (b.circle ?? 0));
+  for (const s of ordered) {
+    const p = owner(s);
+    if (!p || !isOffTradition(s, p)) continue;
+    // Vagas específicas primeiro; Teurgista (qualquer magia) por último.
+    const g = [...p.grants].sort((a, b) => (a.perCircle - b.perCircle) || (!!b.schools - !!a.schools)).find(x => grantFits(x, s, { maxCircle: 99 }));
+    if (!g) continue;
+    if (g.perCircle) g.usedCircles.add(s.circle);
+    else g.used += 1;
+  }
+  return profiles;
 }
 
 /** Junta a avaliação de todos os perfis: basta um permitir. */
@@ -113,7 +222,7 @@ export function evaluateSpell(spell, profiles) {
   if (!profiles.length) return { status: 'blocked', reasons: ['Nenhuma classe conjuradora na ficha.'], by: [] };
   const by = profiles.map(p => ({ profile: p.id, ...evaluateForProfile(spell, p) }));
   const allowed = by.find(r => r.status === 'allowed');
-  if (allowed) return { status: 'allowed', reasons: [], by };
+  if (allowed) return { status: 'allowed', reasons: allowed.grant ? [`Pela regra de ${allowed.grant}.`] : [], by, grant: allowed.grant ?? null };
   const rev = by.find(r => r.status === 'review');
   if (rev) return { status: 'review', reasons: rev.reasons, by };
   return { status: 'blocked', reasons: [...new Set(by.flatMap(r => r.reasons))], by };
@@ -133,15 +242,16 @@ export const learnedByFor = profile => (!profile ? null : profile.fromPower ? `p
 
 /**
  * Capacidade: quantas magias as classes permitem conhecer e quantas a ficha já tem.
- * Magias de raça e de ganhos extras de poderes ficam fora da conta.
+ * Magias de raça e de ganhos extras de poderes ficam fora da conta; poderes da classe (Conhecimento Mágico etc.)
+ * já estão no `known` dos perfis (applySpellPowers) e as copiadas com Escriba Arcano somam no total.
  */
 export function learningCapacity(profiles, knownSpells) {
-  const allowed = profiles.reduce((s, p) => s + p.known, 0);
-  // Magias copiadas com Escriba Arcano não ocupam as escolhas de nível.
+  // Magias copiadas com Escriba Arcano são do Arcanista: entram no total, mas não ocupam as escolhas de nível.
   const extra = knownSpells.filter(s => s.learnedBy === 'escriba').length;
+  const allowed = profiles.reduce((s, p) => s + p.known, 0) + extra;
   const borrowed = knownSpells.filter(s => s.learnedBy === 'usurpar').length; // magias usurpadas não são aprendidas
   const other = knownSpells.filter(s => NOT_CLASS_SPELL.has(s.learnedBy)).length;
-  const current = knownSpells.length - extra - borrowed - other;
+  const current = knownSpells.length - borrowed - other;
   const necro = profiles.find(p => p.necromancer);
   const necroCount = knownSpells.filter(s => s.school === 'nec').length;
   return { allowed, current, extra, remaining: allowed - current, necro: necro ? { count: necroCount, total: current } : null };

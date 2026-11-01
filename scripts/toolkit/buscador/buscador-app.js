@@ -28,6 +28,19 @@ const STATUS_LABEL = { allowed: 'Pode aprender', review: 'Conferir', blocked: 'F
 
 export { readSchools, casterContext };
 
+/** Resumo de uma vaga de outra tradição (Teurgista Místico etc.) para o cartão da classe. */
+function grantText(g, p) {
+  const other = g.tradition ? (g.tradition === 'div' ? 'divinas' : 'arcanas') : (p.tradition === 'arc' ? 'divinas' : 'arcanas');
+  const circles = g.maxCircle ? ` até o ${g.maxCircle}º círculo` : '';
+  const schools = g.schools ? ` (${g.schools.map(s => SPELL_SCHOOLS[s] ?? s).join(' ou ')})` : '';
+  if (g.perCircle) {
+    const used = [...g.usedCircles].sort().map(c => `${c}º`).join(', ');
+    return `${g.label}: uma ${other.slice(0, -1)} por círculo${used ? ` (já usada no ${used})` : ''}`;
+  }
+  if (g.slots === Infinity) return `${g.label}: pode aprender ${other}${circles}`;
+  return `${g.label}: ${g.used} de ${g.slots} ${other}${circles}${schools}`;
+}
+
 export class BuscadorApp extends ApplicationV2 {
   static DEFAULT_OPTIONS = {
     classes: ['t20tk-app', 't20tk-buscador-app'],
@@ -49,9 +62,11 @@ export class BuscadorApp extends ApplicationV2 {
     }
   };
 
-  constructor({ actor = null, ...options } = {}) {
+  constructor({ actor = null, closeWhenDone = false, ...options } = {}) {
     super({ id: `t20tk-buscador-${actor?.id ?? 'livre'}`, ...options });
     this.actor = actor;
+    /** Aberto pelo Planejador para escolher as magias novas: fecha sozinho quando a lista fica completa. */
+    this.closeWhenDone = closeWhenDone;
     this.filters = { ...EMPTY_FILTERS, panel: false, onlyAllowed: !!actor, hideOwned: false, selected: null };
     this.index = null;
     this.details = new Map();
@@ -121,7 +136,7 @@ export class BuscadorApp extends ApplicationV2 {
       tool: 'buscador', actor: this.actor, who,
       eyebrow: 'Consulta', title: 'Buscador de Magias',
       subtitle: this.actor ? 'Veja o que o personagem pode aprender e adicione à ficha.' : 'Explore o catálogo. Abra pela ficha para conferir a classe.'
-    }, `${this.#renderProfiles()}
+    }, `${this.#renderPickBanner()}${this.#renderProfiles()}
       ${this.#renderFilters()}
       <div class="t20tk-bz-body">
         <ol class="t20tk-bz-list" data-region="results">${this.#renderResults()}</ol>
@@ -163,6 +178,16 @@ export class BuscadorApp extends ApplicationV2 {
     if (count) count.textContent = this.#countText();
   }
 
+  /** Aviso do modo de escolha (vindo do Planejador): quantas faltam e que a janela fecha sozinha. */
+  #renderPickBanner() {
+    const cap = this.ctx?.capacity;
+    if (!this.closeWhenDone || !cap?.allowed) return '';
+    const n = cap.remaining;
+    return `<p class="t20tk-bz-note" data-region="pick">${n > 0
+      ? `Escolha <b>${n}</b> magia${n > 1 ? 's' : ''}. O Buscador fecha sozinho quando a lista estiver completa.`
+      : 'Lista de magias completa.'}</p>`;
+  }
+
   #renderProfiles() {
     if (!this.actor) return '';
     const { profiles, capacity } = this.ctx;
@@ -177,6 +202,7 @@ export class BuscadorApp extends ApplicationV2 {
           <span>Até o <b>${p.maxCircle}º</b> círculo</span>
           <span>Magias ${p.tradition === 'arc' ? 'arcanas' : 'divinas'}</span>
           ${p.usurper ? '' : `<span><b>${p.known}</b> magias pela regra</span>`}
+          ${(p.grants ?? []).map(g => `<span>${escapeHtml(grantText(g, p))}</span>`).join('')}
           <span class="t20tk-bz-source">${escapeHtml(p.source)}</span>
         </div>
         ${p.warnings.map(w => `<p class="t20tk-bz-warn">${escapeHtml(w)}</p>`).join('')}
@@ -189,13 +215,13 @@ export class BuscadorApp extends ApplicationV2 {
     const capText = cap.allowed
       ? `<b>${cap.current}</b> de <b>${cap.allowed}</b> magias na ficha · ${cap.remaining > 0 ? `${cap.remaining} para escolher` : cap.remaining === 0 ? 'lista completa' : `${-cap.remaining} acima da regra`}`
       : `<b>${cap.current}</b> magias na ficha`;
-    const extraText = cap.extra ? ` · +${cap.extra} copiada${cap.extra > 1 ? 's' : ''} com Escriba Arcano (não conta${cap.extra > 1 ? 'm' : ''})` : '';
+    const extraText = cap.extra ? ` · inclui ${cap.extra} copiada${cap.extra > 1 ? 's' : ''} com Escriba Arcano` : '';
     const open = this.filters.profileOpen ?? profiles.some(p => p.warnings.length || (p.schoolsRequired && !p.schools));
     const summary = profiles.map(p => `${escapeHtml(p.label)} ${p.level} · até ${p.maxCircle}º`).join(' / ');
     return `<details class="t20tk-disclosure t20tk-profile-box" data-region="profile" ${open ? 'open' : ''}>
       <summary><span class="t20tk-profile-sum"><b>${summary}</b><span class="t20tk-bz-capacity ${capClass}">${capText}</span></span></summary>
       <div class="t20tk-disclosure-body"><section class="t20tk-bz-profiles">${cards}${this.#renderDuploPicker()}
-        <div class="t20tk-bz-capacity ${capClass}">${extraText ? extraText.replace(/^ · /, '') + ' · ' : ''}<small>Magias de raça e de ganhos extras de poderes não contam aqui.</small></div>
+        <div class="t20tk-bz-capacity ${capClass}">${extraText ? extraText.replace(/^ · /, '') + ' · ' : ''}<small>Poderes da classe (Conhecimento Mágico, Escriba Arcano etc.) somam no total; magias de raça e de ganhos extras de poderes não contam aqui.</small></div>
       </section></div>
     </details>`;
   }
@@ -362,6 +388,13 @@ export class BuscadorApp extends ApplicationV2 {
       if (learnedBy) foundry.utils.setProperty(data, `flags.${MODULE_ID}.learnedBy`, learnedBy);
       const [created] = await actor.createEmbeddedDocuments('Item', [data]);
       ui.notifications.info(`${created?.name ?? row.spell.name} adicionada a ${actor.name}.`);
+      // Veio do Planejador: com a lista completa, as escolhas terminaram e a criação segue.
+      const cap = this.closeWhenDone ? casterContext(actor).capacity : null;
+      if (cap?.allowed && cap.remaining <= 0) {
+        this.closeWhenDone = false;
+        ui.notifications.info(`Magias escolhidas: ${cap.current} de ${cap.allowed}.`);
+        await this.close();
+      }
     } catch (error) {
       console.error('[T20 Toolkit] Falha ao adicionar magia:', error);
       ui.notifications.error(`Não foi possível adicionar a magia: ${error.message}`);
@@ -415,15 +448,16 @@ export class BuscadorApp extends ApplicationV2 {
 }
 
 /** Abre (ou traz para frente) o Buscador do personagem. */
-export async function openBuscador({ actor = null, focus = null, focusName = '' } = {}) {
+export async function openBuscador({ actor = null, focus = null, focusName = '', closeWhenDone = false } = {}) {
   actor ??= globalThis.canvas?.tokens?.controlled?.[0]?.actor ?? game.user?.character ?? null;
   const id = `t20tk-buscador-${actor?.id ?? 'livre'}`;
   const existing = foundry.applications.instances.get(id);
   if (existing) {
+    if (closeWhenDone) existing.closeWhenDone = true;
     if (focus) { await existing.focusSpell(focus, focusName); return existing; }
     return reopen(existing);
   }
-  const app = new BuscadorApp({ actor });
+  const app = new BuscadorApp({ actor, closeWhenDone });
   if (focus) {
     await app.render({ force: true });
     await app.focusSpell(focus, focusName);

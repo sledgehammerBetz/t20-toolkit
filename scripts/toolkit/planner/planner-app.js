@@ -441,7 +441,7 @@ export class PlannerApp extends ApplicationV2 {
         note: g.gains.some(x => x.kind === 'spells') ? 'Escolha as magias novas no Buscador.' : ''
       });
       this.selected = Math.min(level + 1, 20);
-      if (g.gains.some(x => x.kind === 'spells')) game.t20Toolkit?.buscador?.open({ actor });
+      if (g.gains.some(x => x.kind === 'spells')) game.t20Toolkit?.buscador?.open({ actor, closeWhenDone: true });
     } catch (error) {
       console.error('[T20 Toolkit] Planejador:', error);
       ui.notifications.error(`Não foi possível aplicar o nível: ${error.message}`);
