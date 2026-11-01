@@ -109,6 +109,12 @@ export function racePools(race, racialPowers) {
   }).filter(p => p.options.length);
 }
 
+/**
+ * Mesma habilidade dividida em itens por opção ("Afinidade Elemental (Água)", "(Fogo)", "(Vegetação)"):
+ * no banco vale como uma só, então escolher uma bloqueia as outras.
+ */
+export const poolGroup = name => abilityKey(String(name ?? '').replace(/\s*\([^)]*\)+\s*$/, ''));
+
 /** Habilidades da raça (concedidas + escolhidas nos bancos) que pedem escolha. */
 export function raceAbilityChoices(abilityNames) {
   const out = [];
@@ -173,7 +179,10 @@ export function raceChoiceProblems(choices, picks = {}, pools = [], poolPicks = 
     if (!p.value) out.push(c.name);
   });
   for (const pool of pools) {
-    const n = (poolPicks[pool.id] ?? []).length;
+    const ids = poolPicks[pool.id] ?? [];
+    const names = ids.map(u => pool.options.find(o => o.uuid === u)?.name).filter(Boolean);
+    if (new Set(names.map(poolGroup)).size < names.length) out.push(`${pool.label}: mesma habilidade duas vezes`);
+    const n = ids.length;
     if (n < pool.min) out.push(`${pool.label} (${n}/${pool.min})`);
     if (n > pool.count) out.push(`${pool.label}: no máximo ${pool.count}`);
   }

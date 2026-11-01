@@ -19,6 +19,8 @@ export const POWER_CHOICES = Object.freeze({
   'familiar': { kind: 'variant', label: 'Qual familiar', match: ANY_FAMILIAR, book: 'Tormenta20, p. 38; Ameaças de Arton' },
   // Heróis de Arton: o segundo benefício vem dos tipos comuns (Tormenta20, p. 38).
   'familiar aprimorado': { kind: 'variant', label: 'Segundo benefício', match: key => BASIC_FAMILIARS.test(key), book: 'Heróis de Arton', keepVisible: true },
+  // Distinção Mestre de Armearia (Guia de NPCs e DBs): uma inovação por arma; as inovações não são poderes avulsos.
+  'inovacao tecnologica': { kind: 'variant', label: 'Inovação', match: key => /^inovacao: /.test(key), hideAlways: true },
   'especialista em escola': { kind: 'options', label: 'Escola de magia', options: Object.values(SPELL_SCHOOLS) },
   'mestre em escola': { kind: 'options', label: 'Escola de magia', options: Object.values(SPELL_SCHOOLS) },
   'totem espiritual': { kind: 'options', label: 'Animal totêmico', options: ['Coruja', 'Corvo', 'Falcão', 'Grifo', 'Lobo', 'Raposa', 'Tartaruga', 'Urso'] },
@@ -44,7 +46,7 @@ export function powerChoiceOptions(spec, idx, labels = {}) {
   if (spec.kind === 'variant') {
     const seen = new Set();
     return idx.powers.filter(p => spec.match(p.key) && !seen.has(p.key) && seen.add(p.key))
-      .map(p => ({ value: p.uuid, label: familiarLabel(p.name), book: p.packLabel ?? '' }))
+      .map(p => ({ value: p.uuid, label: familiarLabel(p.name).replace(/^Inova[çc][ãa]o:\s*/i, ''), book: p.packLabel ?? '' }))
       .sort((a, b) => (BASIC_FAMILIARS.test(fold(idx.powerByUuid?.get(b.value)?.name ?? '')) - BASIC_FAMILIARS.test(fold(idx.powerByUuid?.get(a.value)?.name ?? ''))) || a.label.localeCompare(b.label, 'pt-BR'));
   }
   if (spec.kind === 'options') return spec.options.map(o => ({ value: o, label: o }));
@@ -67,5 +69,5 @@ export function powerChoiceLabel(spec, value, idx, labels = {}) {
 
 /** Variantes que só fazem sentido pela escolha do poder base (somem da lista de poderes). */
 export function isChoiceVariant(power, pool) {
-  return Object.entries(POWER_CHOICES).some(([base, spec]) => spec.kind === 'variant' && !spec.keepVisible && spec.match(power.key) && pool.some(p => p.key === base));
+  return Object.entries(POWER_CHOICES).some(([base, spec]) => spec.kind === 'variant' && !spec.keepVisible && spec.match(power.key) && (spec.hideAlways || pool.some(p => p.key === base)));
 }

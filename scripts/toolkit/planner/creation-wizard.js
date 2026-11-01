@@ -14,7 +14,7 @@ import { GENERAL_CATS, catOf } from './level-view.js';
 import { devotionCheck, mustBeDevout, DEVOTEES, ALT_DEVOTIONS, altDevotionsFor, grantedPowerCount } from '../core/gods.js';
 import { GRANTED_POWERS, POWER_ALIASES } from '../usurpador/usurpador-rules.js';
 import { getTableRules, allowedAgeRules, remapRacial, racialModifiers } from '../core/table-rules.js';
-import { powerGroupFilter, spellSlotFilter, siblingValues } from './race-choices.js';
+import { powerGroupFilter, spellSlotFilter, siblingValues, poolGroup } from './race-choices.js';
 import { toggleSkill } from './skill-plan.js';
 import { getSpellIndex } from '../core/spell-index.js';
 import { CASTER_CLASSES } from '../core/caster-rules.js';
@@ -199,8 +199,10 @@ function stepRaceChoices(app, cr, rules, info) {
   const pools = info.pools.map(pool => {
     const chosen = new Set(cr.racePool?.[pool.id] ?? []);
     const full = chosen.size >= pool.count;
+    const groups = new Set(pool.options.filter(o => chosen.has(o.uuid)).map(o => poolGroup(o.name)));
+    const blockedBy = o => !chosen.has(o.uuid) && groups.has(poolGroup(o.name));
     return `<section class="t20tk-wz-box"><header><b>${escapeHtml(pool.label)}</b><small>Escolha ${pool.min === pool.count ? pool.count : `até ${pool.count}`} (${chosen.size}/${pool.count}).${pool.note ? ` ${escapeHtml(pool.note)}` : ''}</small></header>
-      <ul class="t20tk-wz-tiles">${pool.options.map(o => `<li><button type="button" class="t20tk-wz-tile ${chosen.has(o.uuid) ? 'is-on' : ''}" data-action="wzPool" data-pool="${pool.id}" data-value="${o.uuid}" ${full && !chosen.has(o.uuid) ? 'disabled' : ''} title="${escapeHtml(strip(o.description).slice(0, 300))}"><b>${escapeHtml(o.name)}</b><small>${escapeHtml(strip(o.description).slice(0, 110))}…</small></button></li>`).join('')}</ul></section>`;
+      <ul class="t20tk-wz-tiles">${pool.options.map(o => `<li><button type="button" class="t20tk-wz-tile ${chosen.has(o.uuid) ? 'is-on' : ''}" data-action="wzPool" data-pool="${pool.id}" data-value="${o.uuid}" ${(full && !chosen.has(o.uuid)) || blockedBy(o) ? 'disabled' : ''} title="${escapeHtml(strip(o.description).slice(0, 300))}"><b>${escapeHtml(o.name)}</b><small>${escapeHtml(strip(o.description).slice(0, 110))}…</small></button></li>`).join('')}</ul></section>`;
   }).join('');
   return `<div class="t20tk-wz-page">${pools}${blocks}${info.problems.length ? `<p class="t20tk-bz-warn">Falta: ${info.problems.map(escapeHtml).join('; ')}</p>` : ''}</div>`;
 }
